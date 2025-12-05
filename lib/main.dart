@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
-import 'core/services/api_service. dart';
+import 'core/services/api_service.dart';
 import 'navigation/app_router.dart';
 
 /// The main entry point of the CareLink Wristband app.
