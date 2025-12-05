@@ -51,11 +51,11 @@ class MetricCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Icon in rounded square container
+          // Icon in rounded square container - slightly smaller
           Container(
-            padding: const EdgeInsets.all(12), // 12px padding as per design spec
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: iconBackgroundColor ?? AppColors.primaryBlue,
               borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
@@ -63,12 +63,13 @@ class MetricCard extends StatelessWidget {
             child: Icon(
               icon,
               color: Colors.white,
-              size: AppConstants.iconMedium,
+              size: 22,
             ),
           ),
-          const SizedBox(height: AppConstants.paddingMedium),
+          
+          const Spacer(),
 
-          // Label - smaller gray text (13sp as per design spec)
+          // Label - smaller gray text
           Text(
             label,
             style: const TextStyle(
@@ -80,17 +81,21 @@ class MetricCard extends StatelessWidget {
           ),
           const SizedBox(height: AppConstants.paddingXSmall),
 
-          // Value with unit - BIG number (26sp), smaller unit (14sp) as per design spec
+          // Value with unit - BIG number, smaller unit
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: valueColor ?? AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: valueColor ?? AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (unit != null) ...[

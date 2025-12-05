@@ -102,7 +102,7 @@ class _DashboardContent extends StatelessWidget {
               crossAxisCount: 2,
               mainAxisSpacing: AppConstants.paddingMedium,
               crossAxisSpacing: AppConstants.paddingMedium,
-              childAspectRatio: 1.0,
+              childAspectRatio: 0.9,
               children: const [
                 MetricCard(
                   label: 'Heart Rate',
