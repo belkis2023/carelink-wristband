@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
+import '../../../core/services/api_service.dart';
 
 /// The sign-up screen where new users create an account.
 class SignUpScreen extends StatefulWidget {
@@ -24,6 +25,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   // Track whether terms are accepted
   bool _acceptedTerms = false;
+  
+  // API service for backend communication
+  final _apiService = ApiService();
+  
+  // Loading state
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -36,8 +43,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   /// Handles the account creation process
-  /// In a real app, this would create an account with a backend
-  void _handleSignUp() {
+  /// Creates an account with the Flask backend
+  Future<void> _handleSignUp() async {
     if (_formKey.currentState!.validate()) {
       if (!_acceptedTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -49,9 +56,39 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return;
       }
 
-      // For now, just navigate to the dashboard
-      // In a real app, you would create an account with a backend here
-      Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Call signup API
+        await _apiService.signup(
+          _emailController.text.trim(),
+          _passwordController.text,
+          _nameController.text.trim(),
+        );
+
+        // Navigate to connection test screen on success
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(AppRouter.connectionTest);
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
@@ -210,8 +247,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                   // Create Account Button
                   CustomButton(
-                    text: 'Create Account',
-                    onPressed: _handleSignUp,
+                    text: _isLoading ? 'Creating Account...' : 'Create Account',
+                    onPressed: _isLoading ? () {} : _handleSignUp,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 

@@ -8,6 +8,7 @@ import '../widgets/profile_card.dart';
 import '../widgets/wristband_controls_card.dart';
 import '../widgets/threshold_slider.dart';
 import '../widgets/settings_menu_item.dart';
+import '../../../core/services/api_service.dart';
 
 /// The settings screen for configuring app preferences, thresholds, and account settings.
 class SettingsScreen extends StatefulWidget {
@@ -259,15 +260,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(context).pop();
-              // Navigate back to login (in a real app)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Signed out successfully'),
-                  backgroundColor: AppColors.successGreen,
-                ),
-              );
+              
+              // Sign out using API service
+              final apiService = ApiService();
+              await apiService.logout();
+              
+              // Navigate to login screen
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRouter.login,
+                  (route) => false, // Remove all previous routes
+                );
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Signed out successfully'),
+                    backgroundColor: AppColors.successGreen,
+                  ),
+                );
+              }
             },
             child: const Text(
               'Sign Out',
