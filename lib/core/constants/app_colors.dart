@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// This file contains all the color definitions used in the CareLink Wristband app.
+/// This file contains all the color definitions used in the CareLink Wristband app. 
 /// Using a centralized color palette ensures consistency across the app. 
 class AppColors {
   // Primary Colors - Main brand colors used for headers, icons, and key UI elements
@@ -11,7 +11,7 @@ class AppColors {
   // Status Colors - Used to indicate different states and alerts
   static const Color successGreen = Color(0xFF4CAF50); // Connection status, "ON" badges
   static const Color warningYellow = Color(0xFFFFD54F); // Yellow alert icons
-  static const Color warningOrange = Color(0xFFFF9800); // Orange for warnings  ← ADD THIS LINE
+  static const Color warningOrange = Color(0xFFFF9800); // ← ADD THIS LINE! 
   static const Color dangerRed = Color(0xFFE53935); // Red alert icons
 
   // Background Colors - Used for screens, cards, and containers
