@@ -78,7 +78,7 @@ class MetricCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppConstants.paddingXSmall),
 
           // Value with unit - BIG number (26sp), smaller unit (14sp) as per design spec
           Row(
@@ -94,7 +94,7 @@ class MetricCard extends StatelessWidget {
                 ),
               ),
               if (unit != null) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: AppConstants.paddingXSmall),
                 Text(
                   unit!,
                   style: const TextStyle(
