@@ -169,9 +169,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         icon: Icons.family_restroom_outlined,
                         items: ['Parent', 'Guardian', 'Caregiver', 'Other'],
                         onChanged: (value) {
-                          setState(() {
-                            _selectedRelationship = value!;
-                          });
+                          if (value != null) {
+                            setState(() {
+                              _selectedRelationship = value;
+                            });
+                          }
                         },
                       ),
                       const SizedBox(height: AppConstants.paddingMedium),
