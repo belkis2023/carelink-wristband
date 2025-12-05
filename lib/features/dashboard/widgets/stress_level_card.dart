@@ -47,7 +47,7 @@ class StressLevelCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
                 ),
                 child: Icon(
-                  Icons.favorite_rounded,
+                  Icons.psychology,
                   color: AppColors.primaryBlue,
                   size: AppConstants.iconMedium,
                 ),
