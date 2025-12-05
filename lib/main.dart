@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
-import 'core/services/api_service.dart';
+import 'core/services/api_service. dart';
 import 'navigation/app_router.dart';
 
 /// The main entry point of the CareLink Wristband app.
 /// This function initializes and runs the Flutter application.
-void main() {
+void main() async {
+  // IMPORTANT: This must be called before using any plugins (like SharedPreferences)
+  WidgetsFlutterBinding. ensureInitialized();
+  
   runApp(const CareLinkApp());
 }
 
@@ -40,16 +43,20 @@ class _CareLinkAppState extends State<CareLinkApp> {
   Future<void> _checkAuthStatus() async {
     try {
       final isLoggedIn = await _apiService.isLoggedIn();
-      setState(() {
-        _initialRoute = isLoggedIn ? AppRouter.dashboard : AppRouter.login;
-        _isCheckingAuth = false;
-      });
+      if (mounted) {
+        setState(() {
+          _initialRoute = isLoggedIn ? AppRouter.dashboard : AppRouter.login;
+          _isCheckingAuth = false;
+        });
+      }
     } catch (e) {
       // If there's an error, default to login screen
-      setState(() {
-        _initialRoute = AppRouter.login;
-        _isCheckingAuth = false;
-      });
+      if (mounted) {
+        setState(() {
+          _initialRoute = AppRouter.login;
+          _isCheckingAuth = false;
+        });
+      }
     }
   }
 
