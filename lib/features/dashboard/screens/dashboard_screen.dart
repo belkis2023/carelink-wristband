@@ -106,7 +106,7 @@ class _DashboardContent extends StatelessWidget {
               children: const [
                 MetricCard(
                   title: 'Heart Rate',
-                  value: '78',
+                  value: '78 BPM',
                   icon: Icons.favorite_rounded,
                 ),
                 MetricCard(

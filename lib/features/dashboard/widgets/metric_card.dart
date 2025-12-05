@@ -64,20 +64,20 @@ class MetricCard extends StatelessWidget {
           ),
           const SizedBox(height: AppConstants.paddingSmall),
 
-          // Metric value
-          Text(
-            value,
-            style: AppTextStyles.valueMedium.copyWith(
-              color: valueColor,
-            ),
-          ),
-
-          // Metric title
+          // Metric title (label first)
           Text(
             title,
             style: AppTextStyles.bodySmall,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+
+          // Metric value (with unit below)
+          Text(
+            value,
+            style: AppTextStyles.valueMedium.copyWith(
+              color: valueColor,
+            ),
           ),
         ],
       ),
