@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
+import '../services/auth_service.dart';
 
 /// The login screen where users sign in to the CareLink Wristband app.
 /// This is the first screen users see when opening the app.
@@ -20,6 +21,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  
+  // Auth service to handle authentication
+  final _authService = AuthService();
+  
+  // Track loading state during authentication
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -29,13 +36,47 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  /// Handles the sign-in process
-  /// In a real app, this would validate credentials with a backend
-  void _handleSignIn() {
-    if (_formKey.currentState!.validate()) {
-      // For now, just navigate to the dashboard
-      // In a real app, you would authenticate with a backend here
-      Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+  /// Handles the sign-in process with Supabase authentication
+  Future<void> _handleSignIn() async {
+    // Validate form fields
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Attempt to sign in with Supabase
+      final error = await _authService.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      // If still mounted after async operation
+      if (!mounted) return;
+
+      if (error == null) {
+        // Sign in successful - navigate to dashboard
+        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      } else {
+        // Sign in failed - show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.dangerRed,
+          ),
+        );
+      }
+    } finally {
+      // Hide loading indicator
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -144,8 +185,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Sign In Button
                   CustomButton(
-                    text: 'Sign In',
-                    onPressed: _handleSignIn,
+                    text: _isLoading ? 'Signing In...' : 'Sign In',
+                    onPressed: _isLoading ? () {} : _handleSignIn,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 

@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
+import 'core/services/supabase_service.dart';
+import 'features/auth/screens/login_screen.dart';
 import 'navigation/app_router.dart';
 
 /// The main entry point of the CareLink Wristband app.
 /// This function initializes and runs the Flutter application.
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase
+  await SupabaseService.initialize();
+  
   runApp(const CareLinkApp());
 }
 
@@ -26,8 +34,10 @@ class CareLinkApp extends StatelessWidget {
       // Remove debug banner in top-right corner
       debugShowCheckedModeBanner: false,
 
-      // Set initial route to login screen
-      initialRoute: AppRouter.login,
+      // Check if user is already logged in
+      home: SupabaseService.isLoggedIn 
+          ? const MainNavigator()  // Go to dashboard if logged in
+          : const LoginScreen(),   // Go to login if not logged in
 
       // Generate routes based on route names
       onGenerateRoute: AppRouter.generateRoute,
