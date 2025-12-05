@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.edit_rounded,
               onTap: () {
                 // Navigate to edit profile screen
-                _showComingSoonSnackbar(context, 'Edit Profile');
+                Navigator.of(context).pushNamed('/edit-profile');
               },
             ),
           ),

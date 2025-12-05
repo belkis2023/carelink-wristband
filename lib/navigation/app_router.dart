@@ -6,6 +6,7 @@ import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/history/screens/history_screen.dart';
 import '../features/alerts/screens/alerts_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
+import '../features/settings/screens/edit_profile_screen.dart';
 
 /// This class manages all navigation routes in the CareLink Wristband app.
 /// It provides a centralized location for route names and routing logic.
@@ -18,6 +19,7 @@ class AppRouter {
   static const String history = '/history';
   static const String alerts = '/alerts';
   static const String settings = '/settings';
+  static const String editProfile = '/edit-profile';
 
   /// Generates routes based on the route name
   static Route<dynamic> generateRoute(RouteSettings routeSettings) {
@@ -36,6 +38,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const AlertsScreen());
       case settings:
         return MaterialPageRoute(builder: (_) => const SettingsScreen());
+      case editProfile:
+        return MaterialPageRoute(builder: (_) => const EditProfileScreen());
       default:
         // Return a default error page if route is not found
         return MaterialPageRoute(
