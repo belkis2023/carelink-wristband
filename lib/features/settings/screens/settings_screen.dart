@@ -3,6 +3,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_card.dart';
+import '../../../navigation/app_router.dart';
 import '../widgets/profile_card.dart';
 import '../widgets/wristband_controls_card.dart';
 import '../widgets/threshold_slider.dart';
@@ -57,7 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.edit_rounded,
               onTap: () {
                 // Navigate to edit profile screen
-                Navigator.of(context).pushNamed('/edit-profile');
+                Navigator.of(context).pushNamed(AppRouter.editProfile);
               },
             ),
           ),
