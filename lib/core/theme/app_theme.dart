@@ -43,7 +43,7 @@ class AppTheme {
       ),
 
       // Card Theme - Styling for cards used throughout the app
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.cardBackground,
         elevation: AppConstants.elevationLow,
         shape: RoundedRectangleBorder(
