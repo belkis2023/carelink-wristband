@@ -55,20 +55,20 @@ class MetricCard extends StatelessWidget {
         children: [
           // Icon in rounded square container
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12), // 12px padding as per design spec
             decoration: BoxDecoration(
               color: iconBackgroundColor ?? AppColors.primaryBlue,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
             ),
             child: Icon(
               icon,
               color: Colors.white,
-              size: 24,
+              size: AppConstants.iconMedium,
             ),
           ),
           const SizedBox(height: AppConstants.paddingMedium),
 
-          // Label - smaller gray text
+          // Label - smaller gray text (13sp as per design spec)
           Text(
             label,
             style: const TextStyle(
@@ -80,7 +80,7 @@ class MetricCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // Value with unit - BIG number, smaller unit
+          // Value with unit - BIG number (26sp), smaller unit (14sp) as per design spec
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
