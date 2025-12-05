@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_card.dart';
 import '../../../navigation/app_router.dart';
+import '../../auth/services/auth_service.dart';
 import '../widgets/profile_card.dart';
 import '../widgets/wristband_controls_card.dart';
 import '../widgets/threshold_slider.dart';
@@ -18,6 +19,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  // Auth service to handle logout
+  final _authService = AuthService();
+  
   // Track whether push notifications are enabled
   bool _pushNotificationsEnabled = true;
 
@@ -259,15 +263,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
+              // Close the dialog
               Navigator.of(context).pop();
-              // Navigate back to login (in a real app)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Signed out successfully'),
-                  backgroundColor: AppColors.successGreen,
-                ),
-              );
+              
+              // Sign out from Supabase
+              await _authService.signOut();
+              
+              // Navigate to login screen and remove all previous routes
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRouter.login,
+                  (route) => false,
+                );
+              }
             },
             child: const Text(
               'Sign Out',
