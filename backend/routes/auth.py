@@ -194,5 +194,3 @@ def get_current_user():
     else:
         return jsonify({'error': 'User not found'}), 404
 
-
-
