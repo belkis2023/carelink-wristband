@@ -4,6 +4,13 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../navigation/app_router.dart';
 
+/// Enum for connection states
+enum WristbandConnectionState {
+  searching,
+  connected,
+  notFound,
+}
+
 /// Screen for testing wristband connectivity.
 /// This appears after login/signup and allows users to connect their wristband.
 /// 
@@ -269,11 +276,4 @@ class _ConnectionTestScreenState extends State<ConnectionTestScreen> {
         return AppColors.warningOrange;
     }
   }
-}
-
-/// Enum for connection states
-enum WristbandConnectionState {
-  searching,
-  connected,
-  notFound,
 }

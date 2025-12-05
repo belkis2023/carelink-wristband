@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,6 +11,9 @@ class ApiService {
   // - Android Emulator: 'http://10.0.2.2:5000/api' (maps to host's localhost)
   // - iOS Simulator: 'http://127.0.0.1:5000/api'
   // - Physical Device: 'http://YOUR_COMPUTER_IP:5000/api' (e.g., 'http://192.168.1.100:5000/api')
+  // 
+  // TODO: Consider using environment configuration or a config file for production
+  // to manage different base URLs across environments.
   static const String baseUrl = 'http://10.0.2.2:5000/api';
   
   // Private variable to store the JWT token in memory
@@ -105,7 +109,7 @@ class ApiService {
       }
     } catch (e) {
       // Even if logout request fails, we still clear the local token
-      print('Logout request failed: $e');
+      debugPrint('Logout request failed: $e');
     } finally {
       // Always clear the token locally
       await clearToken();

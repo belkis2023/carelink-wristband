@@ -26,7 +26,7 @@ def get_alerts():
     - 200: List of alerts
     """
     user_id = get_jwt_identity()
-    db = get_db()
+    db = get_db(current_app)
     
     # Fetch all alerts for the user, newest first
     alerts = db.execute(
