@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
+import '../../../core/services/api_service.dart';
 
 /// The login screen where users sign in to the CareLink Wristband app.
 /// This is the first screen users see when opening the app.
@@ -20,6 +21,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  
+  // API service for backend communication
+  final _apiService = ApiService();
+  
+  // Loading state
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -30,12 +37,41 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Handles the sign-in process
-  /// In a real app, this would validate credentials with a backend
-  void _handleSignIn() {
+  /// Validates credentials with the Flask backend
+  Future<void> _handleSignIn() async {
     if (_formKey.currentState!.validate()) {
-      // For now, just navigate to the dashboard
-      // In a real app, you would authenticate with a backend here
-      Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // Call login API
+        await _apiService.login(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+
+        // Navigate to connection test screen on success
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(AppRouter.connectionTest);
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
   }
 
@@ -144,8 +180,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Sign In Button
                   CustomButton(
-                    text: 'Sign In',
-                    onPressed: _handleSignIn,
+                    text: _isLoading ? 'Signing In...' : 'Sign In',
+                    onPressed: _isLoading ? () {} : _handleSignIn,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 

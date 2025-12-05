@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/signup_screen.dart';
 import '../features/auth/screens/forgot_password_screen.dart';
+import '../features/connection/screens/connection_test_screen.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/history/screens/history_screen.dart';
 import '../features/alerts/screens/alerts_screen.dart';
@@ -15,6 +16,7 @@ class AppRouter {
   static const String login = '/';
   static const String signup = '/signup';
   static const String forgotPassword = '/forgot-password';
+  static const String connectionTest = '/connection-test';
   static const String dashboard = '/dashboard';
   static const String history = '/history';
   static const String alerts = '/alerts';
@@ -30,6 +32,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SignUpScreen());
       case forgotPassword:
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
+      case connectionTest:
+        return MaterialPageRoute(builder: (_) => const ConnectionTestScreen());
       case dashboard:
         return MaterialPageRoute(builder: (_) => const DashboardScreen());
       case history:
