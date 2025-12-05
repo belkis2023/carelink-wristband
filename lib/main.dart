@@ -53,13 +53,13 @@ class _CareLinkAppState extends State<CareLinkApp> {
   Widget build(BuildContext context) {
     // Show loading screen while checking authentication
     if (_isCheckingAuth) {
-      return const MaterialApp(
+      return MaterialApp(   // ← REMOVED "const" here! 
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: Colors. white,
           body: Center(
             child: CircularProgressIndicator(
-              color: AppColors.primaryBlue,  // ✅ Fixed! 
+              color: AppColors. primaryBlue,
             ),
           ),
         ),
