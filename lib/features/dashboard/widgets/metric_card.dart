@@ -6,11 +6,14 @@ import '../../../core/constants/app_text_styles.dart';
 /// A compact card widget that displays a single metric value.
 /// Used for Heart Rate, Motion, Noise Level, and Battery metrics.
 class MetricCard extends StatelessWidget {
-  // The metric title (e.g., "Heart Rate")
-  final String title;
+  // The metric title/label (e.g., "Heart Rate")
+  final String label;
 
-  // The metric value (e.g., "78 BPM")
+  // The metric value (e.g., "78")
   final String value;
+
+  // The metric unit (e.g., "BPM") - optional
+  final String? unit;
 
   // The icon to display
   final IconData icon;
@@ -23,8 +26,9 @@ class MetricCard extends StatelessWidget {
 
   const MetricCard({
     super.key,
-    required this.title,
+    required this.label,
     required this.value,
+    this.unit,
     required this.icon,
     this.iconBackgroundColor,
     this.valueColor,
@@ -49,35 +53,57 @@ class MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Icon with background
+          // Icon in rounded square container
           Container(
-            padding: const EdgeInsets.all(AppConstants.paddingSmall),
+            padding: const EdgeInsets.all(12), // 12px padding as per design spec
             decoration: BoxDecoration(
-              color: iconBackgroundColor ?? AppColors.lightBlueBackground,
-              borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+              color: iconBackgroundColor ?? AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
             ),
             child: Icon(
               icon,
-              color: AppColors.primaryBlue,
+              color: Colors.white,
               size: AppConstants.iconMedium,
             ),
           ),
-          const SizedBox(height: AppConstants.paddingSmall),
+          const SizedBox(height: AppConstants.paddingMedium),
 
-          // Metric title (label first)
+          // Label - smaller gray text (13sp as per design spec)
           Text(
-            title,
-            style: AppTextStyles.bodySmall,
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          const SizedBox(height: AppConstants.paddingXSmall),
 
-          // Metric value (with unit below)
-          Text(
-            value,
-            style: AppTextStyles.valueMedium.copyWith(
-              color: valueColor,
-            ),
+          // Value with unit - BIG number (26sp), smaller unit (14sp) as per design spec
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: valueColor ?? AppColors.textPrimary,
+                ),
+              ),
+              if (unit != null) ...[
+                const SizedBox(width: AppConstants.paddingXSmall),
+                Text(
+                  unit!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),

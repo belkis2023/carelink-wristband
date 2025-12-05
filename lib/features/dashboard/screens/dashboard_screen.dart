@@ -105,23 +105,26 @@ class _DashboardContent extends StatelessWidget {
               childAspectRatio: 1.0,
               children: const [
                 MetricCard(
-                  title: 'Heart Rate',
-                  value: '78 BPM',
+                  label: 'Heart Rate',
+                  value: '78',
+                  unit: 'BPM',
                   icon: Icons.favorite_rounded,
                 ),
                 MetricCard(
-                  title: 'Motion',
+                  label: 'Motion',
                   value: 'Moderate',
                   icon: Icons.directions_walk_rounded,
                 ),
                 MetricCard(
-                  title: 'Noise Level',
-                  value: '65 dB',
+                  label: 'Noise Level',
+                  value: '65',
+                  unit: 'dB',
                   icon: Icons.volume_up_rounded,
                 ),
                 MetricCard(
-                  title: 'Battery',
-                  value: '68%',
+                  label: 'Battery',
+                  value: '68',
+                  unit: '%',
                   icon: Icons.battery_5_bar_rounded,
                   valueColor: AppColors.successGreen,
                 ),
