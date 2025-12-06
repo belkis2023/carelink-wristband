@@ -384,7 +384,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   /// Handles saving the profile changes
   void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() ?? false) {
       // In a real app, this would save to a database or API
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
