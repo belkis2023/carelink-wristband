@@ -45,7 +45,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   /// Handles the account creation process
   /// Creates an account with the Flask backend
   Future<void> _handleSignUp() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?. validate() ?? false) {
       if (!_acceptedTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

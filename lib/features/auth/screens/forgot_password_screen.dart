@@ -28,7 +28,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   /// Handles the password reset request
   /// In a real app, this would send a reset link to the user's email
   void _handleResetPassword() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() ?? false) {
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

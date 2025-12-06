@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
   /// Handles the sign-in process
   /// Validates credentials with the Flask backend
   Future<void> _handleSignIn() async {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?. validate() ?? false) {
       setState(() {
         _isLoading = true;
       });
