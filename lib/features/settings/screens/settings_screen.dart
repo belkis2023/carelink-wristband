@@ -31,10 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Monitored Individual Section
           _buildSectionHeader('Monitored Individual'),
-          const ProfileCard(
-            name: 'Alex Johnson',
-            age: '14',
-          ),
+          const ProfileCard(name: 'Alex Johnson', age: '14'),
           const SizedBox(height: AppConstants.paddingSmall),
 
           // Edit Profile Menu Item
@@ -185,7 +182,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Sign Out Button
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingMedium,
+            ),
             child: OutlinedButton(
               onPressed: () {
                 _showSignOutDialog(context);
@@ -210,10 +209,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         horizontal: AppConstants.paddingMedium,
         vertical: AppConstants.paddingSmall,
       ),
-      child: Text(
-        title,
-        style: AppTextStyles.heading3,
-      ),
+      child: Text(title, style: AppTextStyles.heading3),
     );
   }
 
@@ -250,18 +246,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showSignOutDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Sign Out'),
         content: const Text('Are you sure you want to sign out?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              // Navigate back to login (in a real app)
+              // Close the dialog first
+              Navigator.of(dialogContext).pop();
+
+              // Navigate to login screen using root navigator
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+
+              // Show success message
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Signed out successfully'),
