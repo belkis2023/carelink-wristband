@@ -108,10 +108,34 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
       await FlutterBluePlus.stopScan();
       await device.connect(timeout: const Duration(seconds: 10));
 
+      print('✅ Connected to $name!');
+
       if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRouter.dashboard);
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Connected successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        // Wait a moment so user sees the message
+        await Future.delayed(const Duration(seconds: 1));
+
+        // Navigate to dashboard
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, AppRouter.dashboard);
+        }
       }
     } catch (e) {
+      print('❌ Connection failed: $e');
       if (mounted) {
         setState(() {
           _errorMessage = 'Failed to connect to $name';
@@ -147,7 +171,7 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _isScanning
-                      ? 'Scanning...'
+                      ? 'Scanning.. .'
                       : '${_devices.length} devices found',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
@@ -180,7 +204,7 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                     child: _isScanning
                         ? const CircularProgressIndicator()
                         : const Text(
-                            'No devices found.  Tap Scan to try again.',
+                            'No devices found.  Tap Scan to try again. ',
                           ),
                   )
                 : ListView.builder(
