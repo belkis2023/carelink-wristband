@@ -1,169 +1,74 @@
 import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'ble_constants.dart';
-import 'ble_device_model.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-/// The different states our Bluetooth connection can be in
-enum BleConnectionState {
-  disconnected, // Not connected to any device
-  scanning, // Currently looking for devices
-  connecting, // Found a device, trying to connect
-  connected, // Successfully connected!
-  error, // Something went wrong
-}
+/// Connection states for the wristband
+enum BleConnectionState { disconnected, scanning, connecting, connected, error }
 
-/// This service handles ALL Bluetooth communication with the wristband.
-///
-/// WHY USE A SERVICE?
-/// Instead of putting Bluetooth code all over your app, you put it here.
-/// Then any screen can use this service to:
-///   - Scan for devices
-///   - Connect to a device
-///   - Receive heart rate data
-///
-/// SINGLETON PATTERN:
-/// There's only ONE instance of this service in the entire app.
-/// This ensures we don't have multiple Bluetooth connections fighting each other.
-
+/// Simplified BLE service - scans for ALL Bluetooth devices
 class BleService {
-  // ============================================================
-  // SINGLETON SETUP (ensures only one instance exists)
-  // ============================================================
-
-  // The single instance of this service
+  // Singleton pattern
   static final BleService _instance = BleService._internal();
-
-  // When you call BleService(), you get the existing instance
   factory BleService() => _instance;
-
-  // Private constructor (can't create new instances from outside)
   BleService._internal();
 
-  // ============================================================
-  // STATE MANAGEMENT (tracking what's happening)
-  // ============================================================
-
-  // Current connection state
+  // Current state
   BleConnectionState _currentState = BleConnectionState.disconnected;
   BleConnectionState get currentState => _currentState;
   bool get isConnected => _currentState == BleConnectionState.connected;
 
-  // Stream controller for connection state (so UI can listen for changes)
+  // Stream controllers
   final _connectionStateController =
       StreamController<BleConnectionState>.broadcast();
   Stream<BleConnectionState> get connectionState =>
       _connectionStateController.stream;
 
-  // ============================================================
-  // DEVICE DISCOVERY (finding wristbands)
-  // ============================================================
+  final _devicesController = StreamController<List<ScanResult>>.broadcast();
+  Stream<List<ScanResult>> get discoveredDevices => _devicesController.stream;
 
-  // List of devices we've found
-  final List<BleDeviceModel> _devices = [];
-
-  // Stream controller for discovered devices
-  final _devicesController = StreamController<List<BleDeviceModel>>.broadcast();
-  Stream<List<BleDeviceModel>> get discoveredDevices =>
-      _devicesController.stream;
-
-  // ============================================================
-  // HEART RATE DATA (from PPG sensor)
-  // ============================================================
-
-  // Stream controller for heart rate values
   final _heartRateController = StreamController<int>.broadcast();
   Stream<int> get heartRateStream => _heartRateController.stream;
 
-  // Store the last known heart rate
-  int _lastHeartRate = 0;
-  int get lastHeartRate => _lastHeartRate;
-
-  // ============================================================
-  // CONNECTED DEVICE REFERENCES
-  // ============================================================
-
-  // The device we're connected to (null if not connected)
+  // Connected device
   BluetoothDevice? _connectedDevice;
+  BluetoothDevice? get connectedDevice => _connectedDevice;
 
-  // The characteristic we read heart rate from
-  BluetoothCharacteristic? _heartRateCharacteristic;
+  // Store discovered devices
+  final List<ScanResult> _scanResults = [];
 
-  // ============================================================
-  // METHODS (things this service can do)
-  // ============================================================
+  /// Start scanning for ALL Bluetooth devices
+  Future<void> startScan() async {
+    print('BLE: Starting scan...');
+    _scanResults.clear();
+    _updateState(BleConnectionState.scanning);
 
-  /// Check if Bluetooth is available and turned on
-  Future<bool> isBluetoothAvailable() async {
     try {
-      // Check if the device supports Bluetooth
-      final isSupported = await FlutterBluePlus.isSupported;
-      if (!isSupported) {
-        print('BLE: Bluetooth not supported on this device');
-        return false;
+      // Check if Bluetooth is on
+      final adapterState = await FlutterBluePlus.adapterState.first;
+      if (adapterState != BluetoothAdapterState.on) {
+        print('BLE: Bluetooth is OFF.  Please turn it on.');
+        _updateState(BleConnectionState.error);
+        return;
       }
 
-      // Check if Bluetooth is turned on
-      final adapterState = await FlutterBluePlus.adapterState.first;
-      final isOn = adapterState == BluetoothAdapterState.on;
-      print('BLE: Bluetooth is ${isOn ? "ON" : "OFF"}');
-      return isOn;
-    } catch (e) {
-      print('BLE: Error checking Bluetooth: $e');
-      return false;
-    }
-  }
-
-  /// Start scanning for BLE devices
-  Future<void> startScan() async {
-    bool hasPermissions = await requestPermissions();
-    if (!hasPermissions) {
-      print('BLE: Permissions not granted, cannot scan');
-      _updateState(BleConnectionState.error);
-      return;
-    }
-
-    print('BLE: Starting scan.. .');
-    _updateState(BleConnectionState.scanning);
-    _devices.clear();
-
-    try {
-      // Listen to scan results as they come in
+      // Listen to scan results
       FlutterBluePlus.scanResults.listen((results) {
+        _scanResults.clear();
         for (ScanResult result in results) {
-          final deviceName = result.device.platformName;
+          // Add ALL devices (even without names for debugging)
+          _scanResults.add(result);
 
-          // Only add devices that have a name
-          if (deviceName.isNotEmpty) {
-            final device = BleDeviceModel(
-              device: result.device,
-              name: deviceName,
-              id: result.device.remoteId.str,
-              rssi: result.rssi,
-            );
-
-            // Check if we already have this device in our list
-            final existingIndex = _devices.indexWhere((d) => d.id == device.id);
-
-            if (existingIndex >= 0) {
-              // Update existing device (signal strength may have changed)
-              _devices[existingIndex] = device;
-            } else {
-              // Add new device
-              _devices.add(device);
-              print('BLE: Found device: ${device.name} (${device.id})');
-            }
-          }
+          String name = result.device.platformName.isNotEmpty
+              ? result.device.platformName
+              : 'Unknown Device';
+          print('BLE: Found: $name (${result.device.remoteId})');
         }
-
-        // Notify listeners that the device list has changed
-        _devicesController.add(List.from(_devices));
+        _devicesController.add(List.from(_scanResults));
       });
 
-      // Start the actual scan
-      await FlutterBluePlus.startScan(timeout: BleConstants.scanTimeout);
+      // Start scanning (scan for 15 seconds)
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
-      print('BLE: Scan complete.  Found ${_devices.length} devices.');
+      print('BLE: Scan complete.  Found ${_scanResults.length} devices.');
       _updateState(BleConnectionState.disconnected);
     } catch (e) {
       print('BLE: Scan error: $e');
@@ -171,84 +76,36 @@ class BleService {
     }
   }
 
-  /// Request all required permissions for BLE
-  Future<bool> requestPermissions() async {
-    // Request Bluetooth permissions
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
-
-    // Check if all permissions are granted
-    bool allGranted = statuses.values.every(
-      (status) => status.isGranted || status.isLimited,
-    );
-
-    if (!allGranted) {
-      print('BLE: Some permissions were denied');
-      print('BLE: Bluetooth: ${statuses[Permission.bluetooth]}');
-      print('BLE: BluetoothScan: ${statuses[Permission.bluetoothScan]}');
-      print('BLE: BluetoothConnect: ${statuses[Permission.bluetoothConnect]}');
-      print('BLE: Location: ${statuses[Permission.location]}');
-    }
-
-    return allGranted;
-  }
-
-  /// Stop scanning for devices
+  /// Stop scanning
   Future<void> stopScan() async {
-    print('BLE: Stopping scan...');
     await FlutterBluePlus.stopScan();
     _updateState(BleConnectionState.disconnected);
   }
 
-  /// Connect to a specific wristband device
-  Future<bool> connectToDevice(BleDeviceModel deviceModel) async {
-    print('BLE: Connecting to ${deviceModel.name}...');
+  /// Connect to a device
+  Future<bool> connectToDevice(BluetoothDevice device) async {
+    print('BLE: Connecting to ${device.platformName}...');
     _updateState(BleConnectionState.connecting);
 
     try {
-      // Step 1: Connect to the device
-      await deviceModel.device.connect(timeout: BleConstants.connectionTimeout);
+      await device.connect(timeout: const Duration(seconds: 15));
+      _connectedDevice = device;
+
       print('BLE: Connected!  Discovering services...');
 
-      _connectedDevice = deviceModel.device;
-
-      // Step 2: Discover what services/characteristics the device has
-      List<BluetoothService> services = await deviceModel.device
-          .discoverServices();
+      // Discover services
+      List<BluetoothService> services = await device.discoverServices();
       print('BLE: Found ${services.length} services');
 
-      // Step 3: Find our specific service and characteristic
+      // Log all services and characteristics (for debugging)
       for (BluetoothService service in services) {
         print('BLE: Service: ${service.uuid}');
-
-        // Check if this is our CareLink service
-        if (service.uuid.toString().toLowerCase() ==
-            BleConstants.serviceUuid.toLowerCase()) {
-          print('BLE: Found CareLink service! ');
-
-          // Look for the heart rate characteristic
-          for (BluetoothCharacteristic char in service.characteristics) {
-            print('BLE: Characteristic: ${char.uuid}');
-
-            if (char.uuid.toString().toLowerCase() ==
-                BleConstants.heartRateCharUuid.toLowerCase()) {
-              print('BLE: Found heart rate characteristic!');
-              _heartRateCharacteristic = char;
-
-              // Subscribe to heart rate notifications
-              await _subscribeToHeartRate();
-              break;
-            }
-          }
+        for (BluetoothCharacteristic char in service.characteristics) {
+          print('BLE:   - Characteristic: ${char.uuid}');
         }
       }
 
       _updateState(BleConnectionState.connected);
-      print('BLE: Connection complete!');
       return true;
     } catch (e) {
       print('BLE: Connection error: $e');
@@ -257,57 +114,23 @@ class BleService {
     }
   }
 
-  /// Subscribe to heart rate notifications from the wristband
-  Future<void> _subscribeToHeartRate() async {
-    if (_heartRateCharacteristic == null) {
-      print('BLE: No heart rate characteristic to subscribe to');
-      return;
-    }
-
-    try {
-      // Enable notifications (tells the device to send us updates)
-      await _heartRateCharacteristic!.setNotifyValue(true);
-      print('BLE: Subscribed to heart rate notifications');
-
-      // Listen for incoming heart rate values
-      _heartRateCharacteristic!.onValueReceived.listen((value) {
-        if (value.isNotEmpty) {
-          // Parse the heart rate value
-          // This assumes your ESP32 sends a single byte with the BPM
-          // Adjust if your format is different!
-          final heartRate = value[0];
-          _lastHeartRate = heartRate;
-          _heartRateController.add(heartRate);
-          print('BLE: Heart rate received: $heartRate BPM');
-        }
-      });
-    } catch (e) {
-      print('BLE: Error subscribing to heart rate: $e');
-    }
-  }
-
-  /// Disconnect from the current device
+  /// Disconnect
   Future<void> disconnect() async {
-    print('BLE: Disconnecting.. .');
-
     if (_connectedDevice != null) {
       await _connectedDevice!.disconnect();
       _connectedDevice = null;
-      _heartRateCharacteristic = null;
     }
-
     _updateState(BleConnectionState.disconnected);
-    print('BLE: Disconnected');
   }
 
-  /// Update the connection state and notify listeners
+  /// Update state
   void _updateState(BleConnectionState state) {
     _currentState = state;
     _connectionStateController.add(state);
     print('BLE: State changed to: $state');
   }
 
-  /// Clean up resources when the service is no longer needed
+  /// Dispose
   void dispose() {
     _connectionStateController.close();
     _devicesController.close();

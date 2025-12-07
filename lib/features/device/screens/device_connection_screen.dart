@@ -1,20 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/ble/ble_service.dart';
-import '../../../core/services/ble/ble_device_model.dart';
 import '../../../navigation/app_router.dart';
-
-/// This screen allows users to scan for and connect to their CareLink wristband.
-/// It appears after login and before the dashboard.
-///
-/// FLOW:
-/// 1. User sees this screen after logging in
-/// 2. App automatically starts scanning for devices
-/// 3.  User sees a list of found devices
-/// 4. User taps on their wristband to connect
-/// 5. Once connected, app navigates to the dashboard
 
 class DeviceConnectionScreen extends StatefulWidget {
   const DeviceConnectionScreen({super.key});
@@ -24,30 +14,19 @@ class DeviceConnectionScreen extends StatefulWidget {
 }
 
 class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
-  // Get the BLE service instance
   final BleService _bleService = BleService();
-
-  // List of discovered devices
-  List<BleDeviceModel> _devices = [];
-
-  // Are we currently scanning?
+  List<ScanResult> _devices = [];
   bool _isScanning = false;
-
-  // Are we currently connecting?
   bool _isConnecting = false;
-
-  // Error message to display (if any)
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Set up listeners and start scanning when the screen loads
     _setupListeners();
-    _checkBluetoothAndScan();
+    _startScan();
   }
 
-  /// Set up listeners for BLE events
   void _setupListeners() {
     // Listen for connection state changes
     _bleService.connectionState.listen((state) {
@@ -56,16 +35,13 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
         _isConnecting = state == BleConnectionState.connecting;
       });
 
-      // If we successfully connected, go to the dashboard!
       if (state == BleConnectionState.connected) {
         Navigator.pushReplacementNamed(context, AppRouter.dashboard);
       }
 
-      // If there was an error, show a message
-      if (state == BleConnectionState.error) {
+      if (state == BleConnectionState.error && !_isScanning) {
         setState(() {
           _errorMessage = 'Connection failed. Please try again.';
-          _isConnecting = false;
         });
       }
     });
@@ -78,40 +54,36 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
     });
   }
 
-  /// Check if Bluetooth is available and start scanning
-  Future<void> _checkBluetoothAndScan() async {
-    final isAvailable = await _bleService.isBluetoothAvailable();
-
-    if (!isAvailable) {
-      setState(() {
-        _errorMessage = 'Please enable Bluetooth to connect your wristband';
-      });
-      return;
-    }
-
-    _startScan();
-  }
-
-  /// Start scanning for devices
   Future<void> _startScan() async {
     setState(() {
       _errorMessage = null;
+      _devices = [];
     });
+
+    // Check if Bluetooth is on
+    final adapterState = await FlutterBluePlus.adapterState.first;
+    if (adapterState != BluetoothAdapterState.on) {
+      setState(() {
+        _errorMessage = 'Please turn on Bluetooth';
+      });
+
+      // Try to turn on Bluetooth (Android only)
+      await FlutterBluePlus.turnOn();
+      return;
+    }
+
     await _bleService.startScan();
   }
 
-  /// Connect to a specific device
-  Future<void> _connectToDevice(BleDeviceModel device) async {
+  Future<void> _connectToDevice(BluetoothDevice device) async {
     setState(() {
       _errorMessage = null;
     });
 
     final success = await _bleService.connectToDevice(device);
-
     if (!success) {
       setState(() {
-        _errorMessage =
-            'Failed to connect to ${device.name}.  Please try again.';
+        _errorMessage = 'Failed to connect.  Please try again.';
       });
     }
   }
@@ -130,31 +102,29 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
           padding: const EdgeInsets.all(AppConstants.paddingMedium),
           child: Column(
             children: [
-              const SizedBox(height: AppConstants.paddingLarge),
-
-              // ============================================================
-              // HEADER SECTION (icon and instructions)
-              // ============================================================
-              Icon(Icons.watch_rounded, size: 80, color: AppColors.primaryBlue),
               const SizedBox(height: AppConstants.paddingMedium),
 
+              // Header
+              Icon(
+                Icons.bluetooth_searching,
+                size: 60,
+                color: AppColors.primaryBlue,
+              ),
+              const SizedBox(height: AppConstants.paddingMedium),
               Text(
-                'Find Your CareLink Wristband',
+                'Find Your Wristband',
                 style: AppTextStyles.heading2,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppConstants.paddingSmall),
-
               Text(
-                'Make sure your wristband is turned on and nearby',
+                'Select your CareLink wristband from the list below',
                 style: AppTextStyles.subtitle,
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: AppConstants.paddingLarge),
+              const SizedBox(height: AppConstants.paddingMedium),
 
-              // ============================================================
-              // ERROR MESSAGE (if any)
-              // ============================================================
+              // Error message
               if (_errorMessage != null)
                 Container(
                   width: double.infinity,
@@ -167,9 +137,6 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                     borderRadius: BorderRadius.circular(
                       AppConstants.radiusMedium,
                     ),
-                    border: Border.all(
-                      color: AppColors.dangerRed.withOpacity(0.3),
-                    ),
                   ),
                   child: Row(
                     children: [
@@ -178,56 +145,52 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.dangerRed,
-                          ),
+                          style: TextStyle(color: AppColors.dangerRed),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-              // ============================================================
-              // MAIN CONTENT (scanning indicator or device list)
-              // ============================================================
-              Expanded(child: _buildMainContent()),
+              // Device list or status
+              Expanded(child: _buildContent()),
 
-              // ============================================================
-              // BOTTOM BUTTONS
-              // ============================================================
+              // Buttons at bottom
               const SizedBox(height: AppConstants.paddingMedium),
 
-              // Scan Again button
+              // Scan button
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
                   onPressed: (_isScanning || _isConnecting) ? null : _startScan,
-                  icon: Icon(_isScanning ? Icons.hourglass_top : Icons.refresh),
-                  label: Text(_isScanning ? 'Scanning...' : 'Scan Again'),
+                  icon: _isScanning
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: Text(_isScanning ? 'Scanning...' : 'Scan for Devices'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radiusMedium,
-                      ),
-                    ),
                   ),
                 ),
               ),
               const SizedBox(height: AppConstants.paddingSmall),
 
-              // Skip button (for testing only - remove in production!)
+              // Skip button (for testing)
               TextButton(
                 onPressed: () {
                   Navigator.pushReplacementNamed(context, AppRouter.dashboard);
                 },
                 child: Text(
-                  'Skip for now (Testing only)',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textLight,
-                  ),
+                  'Skip for now',
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ),
             ],
@@ -237,9 +200,7 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
     );
   }
 
-  /// Build the main content based on current state
-  Widget _buildMainContent() {
-    // Show loading spinner while scanning
+  Widget _buildContent() {
     if (_isScanning) {
       return const Center(
         child: Column(
@@ -247,13 +208,12 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Scanning for devices... '),
+            Text('Scanning for Bluetooth devices...'),
           ],
         ),
       );
     }
 
-    // Show loading spinner while connecting
     if (_isConnecting) {
       return const Center(
         child: Column(
@@ -261,144 +221,107 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Connecting to wristband...'),
+            Text('Connecting... '),
           ],
         ),
       );
     }
 
-    // Show "no devices" message if list is empty
     if (_devices.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.bluetooth_searching,
+              Icons.bluetooth_disabled,
               size: 64,
-              color: AppColors.textLight,
+              color: AppColors.textSecondary,
             ),
             const SizedBox(height: 16),
             Text('No devices found', style: AppTextStyles.bodyLarge),
             const SizedBox(height: 8),
             Text(
-              'Make sure your wristband is turned on',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textLight,
-              ),
+              'Make sure Bluetooth is on and your\nwristband is nearby',
+              style: TextStyle(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
 
-    // Show list of discovered devices
+    // Show list of ALL discovered devices
     return ListView.builder(
       itemCount: _devices.length,
       itemBuilder: (context, index) {
-        final device = _devices[index];
-        return _buildDeviceCard(device);
-      },
-    );
-  }
+        final result = _devices[index];
+        final device = result.device;
+        final name = device.platformName.isNotEmpty
+            ? device.platformName
+            : 'Unknown Device';
+        final rssi = result.rssi;
 
-  /// Build a card for a single device
-  Widget _buildDeviceCard(BleDeviceModel device) {
-    // Determine if this is a CareLink device (highlight it!)
-    final isCareLink = device.isCareLink;
+        // Highlight CareLink devices
+        final isCareLink = name.toLowerCase().contains('carelink');
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppConstants.paddingSmall),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-        side: isCareLink
-            ? BorderSide(color: AppColors.primaryBlue, width: 2)
-            : BorderSide.none,
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(AppConstants.paddingMedium),
-        leading: Container(
-          padding: const EdgeInsets.all(AppConstants.paddingSmall),
-          decoration: BoxDecoration(
-            color: isCareLink
-                ? AppColors.primaryBlue.withOpacity(0.1)
-                : AppColors.lightBlueBackground,
-            borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: isCareLink
+                ? BorderSide(color: AppColors.primaryBlue, width: 2)
+                : BorderSide.none,
           ),
-          child: Icon(
-            Icons.watch_rounded,
-            color: isCareLink ? AppColors.primaryBlue : AppColors.textLight,
-            size: 32,
-          ),
-        ),
-        title: Text(
-          device.name,
-          style: AppTextStyles.bodyLarge.copyWith(
-            fontWeight: isCareLink ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Row(
+          child: ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isCareLink
+                    ? AppColors.primaryBlue.withOpacity(0.1)
+                    : AppColors.lightBlueBackground,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isCareLink ? Icons.watch : Icons.bluetooth,
+                color: isCareLink
+                    ? AppColors.primaryBlue
+                    : AppColors.textSecondary,
+              ),
+            ),
+            title: Text(
+              name,
+              style: TextStyle(
+                fontWeight: isCareLink ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Signal strength indicator
-                ...List.generate(
-                  3,
-                  (i) => Icon(
-                    Icons.signal_cellular_alt,
-                    size: 12,
-                    color: i < device.signalBars
-                        ? AppColors.successGreen
-                        : AppColors.textLight.withOpacity(0.3),
+                Text('ID: ${device.remoteId}'),
+                Text('Signal: $rssi dBm'),
+                if (isCareLink)
+                  Text(
+                    '✓ CareLink Wristband',
+                    style: TextStyle(
+                      color: AppColors.successGreen,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _signalStrengthText(device.signalBars),
-                  style: AppTextStyles.caption,
-                ),
               ],
             ),
-            if (isCareLink)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '✓ CareLink Wristband',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.successGreen,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+            trailing: ElevatedButton(
+              onPressed: _isConnecting ? null : () => _connectToDevice(device),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isCareLink
+                    ? AppColors.primaryBlue
+                    : AppColors.secondaryBlue,
               ),
-          ],
-        ),
-        trailing: ElevatedButton(
-          onPressed: () => _connectToDevice(device),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: isCareLink
-                ? AppColors.primaryBlue
-                : AppColors.secondaryBlue,
-            foregroundColor: Colors.white,
+              child: const Text('Connect'),
+            ),
+            isThreeLine: true,
           ),
-          child: const Text('Connect'),
-        ),
-      ),
+        );
+      },
     );
-  }
-
-  /// Convert signal bars to text
-  String _signalStrengthText(int bars) {
-    switch (bars) {
-      case 3:
-        return 'Excellent';
-      case 2:
-        return 'Good';
-      case 1:
-        return 'Fair';
-      default:
-        return 'Weak';
-    }
   }
 }
