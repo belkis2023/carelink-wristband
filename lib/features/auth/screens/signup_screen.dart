@@ -15,30 +15,86 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // Controllers to manage text input
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+  // Form key for validation
   final _formKey = GlobalKey<FormState>();
 
-  // Track whether terms are accepted
+  // Account Info Controllers
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  // Monitored Person Controllers
+  final _monitoredNameController = TextEditingController();
+  final _dobController = TextEditingController();
+
+  // Emergency Contact Controllers
+  final _emergencyNameController = TextEditingController();
+  final _emergencyPhoneController = TextEditingController();
+
+  // State variables
   bool _acceptedTerms = false;
+  bool _isLoading = false;
+  String _selectedRelationship = 'Parent';
+  DateTime? _selectedDate;
+
+  // Relationship options
+  final List<String> _relationshipOptions = [
+    'Parent',
+    'Guardian',
+    'Caregiver',
+    'Sibling',
+    'Other',
+  ];
 
   @override
   void dispose() {
-    // Clean up controllers when the widget is disposed
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _monitoredNameController.dispose();
+    _dobController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
     super.dispose();
   }
 
+  /// Opens date picker for DOB selection
+  Future<void> _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 10)),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primaryBlue,
+              onPrimary: Colors.white,
+              surface: AppColors.cardBackground,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _dobController.text = '${picked.month}/${picked.day}/${picked.year}';
+      });
+    }
+  }
+
   /// Handles the account creation process
-  /// In a real app, this would create an account with a backend
-  void _handleSignUp() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _handleSignUp() async {
+    if (_formKey.currentState?.validate() ?? false) {
       if (!_acceptedTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -49,9 +105,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return;
       }
 
-      // For now, just navigate to the dashboard
-      // In a real app, you would create an account with a backend here
-      Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      setState(() {
+        _isLoading = true;
+      });
+
+      // TODO: Add backend integration later
+      // For now, just navigate to dashboard
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -77,10 +145,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Header
-                  Text(
-                    'Create Account',
-                    style: AppTextStyles.heading1,
-                  ),
+                  Text('Create Account', style: AppTextStyles.heading1),
                   const SizedBox(height: AppConstants.paddingSmall),
                   Text(
                     'Sign up to start monitoring',
@@ -88,7 +153,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 
-                  // Full Name Input
+                  // ========== ACCOUNT INFO SECTION ==========
+                  _buildSectionHeader('Account Information'),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Full Name
                   AuthTextField(
                     labelText: 'Full Name',
                     hintText: 'Enter your full name',
@@ -103,7 +172,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Email Input
+                  // Email
                   AuthTextField(
                     labelText: 'Email',
                     hintText: 'Enter your email',
@@ -122,7 +191,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Password Input
+                  // Phone Number
+                  AuthTextField(
+                    labelText: 'Phone Number',
+                    hintText: 'Enter your phone number',
+                    prefixIcon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                    controller: _phoneController,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your phone number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Password
                   AuthTextField(
                     labelText: 'Password',
                     hintText: 'Create a password',
@@ -141,7 +226,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Confirm Password Input
+                  // Confirm Password
                   AuthTextField(
                     labelText: 'Confirm Password',
                     hintText: 'Re-enter your password',
@@ -158,9 +243,71 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: AppConstants.paddingLarge),
+
+                  // ========== MONITORED PERSON SECTION ==========
+                  _buildSectionHeader('Monitored Person Details'),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Terms and Conditions Checkbox
+                  // Monitored Person Name
+                  AuthTextField(
+                    labelText: "Monitored Person's Full Name",
+                    hintText: 'Enter their full name',
+                    prefixIcon: Icons.face_outlined,
+                    controller: _monitoredNameController,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter the monitored person\'s name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Date of Birth
+                  _buildDateField(),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Relationship Dropdown
+                  _buildRelationshipDropdown(),
+                  const SizedBox(height: AppConstants.paddingLarge),
+
+                  // ========== EMERGENCY CONTACT SECTION ==========
+                  _buildSectionHeader('Emergency Contact'),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Emergency Contact Name
+                  AuthTextField(
+                    labelText: 'Emergency Contact Name',
+                    hintText: 'Enter emergency contact name',
+                    prefixIcon: Icons.contact_emergency_outlined,
+                    controller: _emergencyNameController,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter emergency contact name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppConstants.paddingMedium),
+
+                  // Emergency Contact Phone
+                  AuthTextField(
+                    labelText: 'Emergency Contact Phone',
+                    hintText: 'Enter emergency contact phone',
+                    prefixIcon: Icons.phone_outlined,
+                    keyboardType: TextInputType.phone,
+                    controller: _emergencyPhoneController,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter emergency contact phone';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: AppConstants.paddingLarge),
+
+                  // ========== TERMS & CONDITIONS ==========
                   Row(
                     children: [
                       Checkbox(
@@ -210,8 +357,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                   // Create Account Button
                   CustomButton(
-                    text: 'Create Account',
-                    onPressed: _handleSignUp,
+                    text: _isLoading ? 'Creating Account...' : 'Create Account',
+                    onPressed: _isLoading ? () {} : _handleSignUp,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 
@@ -220,7 +367,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Already have an account? ',
+                        'Already have an account?  ',
                         style: AppTextStyles.bodyMedium,
                       ),
                       TextButton(
@@ -237,12 +384,101 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: AppConstants.paddingLarge),
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Builds a section header
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: AppTextStyles.heading3.copyWith(color: AppColors.primaryBlue),
+    );
+  }
+
+  /// Builds the date of birth field
+  Widget _buildDateField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Date of Birth',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AppConstants.paddingSmall),
+        TextFormField(
+          controller: _dobController,
+          readOnly: true,
+          onTap: _selectDate,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please select date of birth';
+            }
+            return null;
+          },
+          decoration: InputDecoration(
+            hintText: 'Select date of birth',
+            prefixIcon: const Icon(
+              Icons.calendar_today_outlined,
+              color: AppColors.primaryBlue,
+            ),
+            suffixIcon: const Icon(
+              Icons.arrow_drop_down,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Builds the relationship dropdown
+  Widget _buildRelationshipDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Relationship to Wearer',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AppConstants.paddingSmall),
+        DropdownButtonFormField<String>(
+          value: _selectedRelationship,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(
+              Icons.family_restroom_outlined,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+          items: _relationshipOptions.map((String relationship) {
+            return DropdownMenuItem<String>(
+              value: relationship,
+              child: Text(relationship),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedRelationship = newValue;
+              });
+            }
+          },
+        ),
+      ],
     );
   }
 }
