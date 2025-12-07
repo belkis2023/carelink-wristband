@@ -1,159 +1,196 @@
-from flask import Blueprint, request, jsonify
+"""
+Authentication Routes
+
+This module handles user authentication including signup, login, logout, and user info.
+Uses JWT tokens for secure authentication.
+"""
+
+import re
 import sqlite3
-import hashlib
-import datetime
-import jwt
-import os
-from functools import wraps
+import bcrypt
+from flask import Blueprint, request, jsonify, current_app
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from database import get_db
 
-auth_bp = Blueprint('auth_bp', __name__)
+# Create a Blueprint for auth routes
+# All routes in this file will be prefixed with /api/auth
+bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
-# --- JWT Setup ---
-JWT_SECRET = 'your-very-secret-key'  # Replace with a strong secret!
-JWT_ALGORITHM = 'HS256'
 
-def generate_jwt(user_id, email):
-    payload = {
-        "user_id": user_id,
-        "email": email,
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=12)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+def is_valid_email(email):
+    """
+    Validate email format using a simple regex pattern.
+    Returns True if email is valid, False otherwise.
+    """
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
 
-def decode_jwt(token):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
 
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            bearer = request.headers['Authorization']
-            parts = bearer.split()
-            if len(parts) == 2 and parts[0] == 'Bearer':
-                token = parts[1]
-        if not token:
-            return jsonify({"error": "Token is missing!"}), 401
-        decoded = decode_jwt(token)
-        if not decoded:
-            return jsonify({"error": "Invalid or expired token!"}), 401
-        request.user = decoded
-        return f(*args, **kwargs)
-    return decorated
-
-# --- Database helpers ---
-DATABASE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'carelink.db'))
-
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-# --- Signup route ---
-@auth_bp.route('/signup', methods=['POST'])
+@bp.route('/signup', methods=['POST'])
 def signup():
+    """
+    Create a new user account.
+    
+    Request body (JSON):
+    - email: string (required) - User's email address
+    - password: string (required) - Password (min 6 characters)
+    - full_name: string (optional) - User's full name
+    
+    Returns:
+    - 201: Account created successfully with JWT token
+    - 400: Invalid input or email already exists
+    """
     data = request.get_json()
-    required_fields = ['email', 'password', 'full_name']
-
-    for field in required_fields:
-        if field not in data or not data[field]:
-            return jsonify({"error": f"Missing required field: {field}"}), 400
-
-    email = data['email']
+    
+    # Validate required fields
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    email = data['email'].strip().lower()
     password = data['password']
-    full_name = data['full_name']
-    password_hash = hash_password(password)
-    created_at = datetime.datetime.utcnow().isoformat()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Check for duplicate email
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-    if cursor.fetchone():
-        conn.close()
-        return jsonify({"error": "Email already registered"}), 409
-
-    # Insert new user
-    cursor.execute(
-        "INSERT INTO users (email, password_hash, full_name, created_at) VALUES (?, ?, ?, ?)",
-        (email, password_hash, full_name, created_at)
-    )
-    user_id = cursor.lastrowid
-
-    # Insert profile info if present
-    profile_fields = ['name', 'age', 'date_of_birth', 'relationship', 'emergency_contact_name', 'emergency_contact_phone']
-    profile_data = {field: data.get(field, "") for field in profile_fields}
-    profile_data['user_id'] = user_id
-
-    cursor.execute(
-        """
-        INSERT INTO profiles (user_id, name, age, date_of_birth, relationship, emergency_contact_name, emergency_contact_phone)
-        VALUES (:user_id, :name, :age, :date_of_birth, :relationship, :emergency_contact_name, :emergency_contact_phone)
-        """,
-        profile_data
-    )
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({"message": "User registered successfully", "user_id": user_id}), 201
-
-# --- Login route with JWT ---
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    required_fields = ['email', 'password']
-
-    for field in required_fields:
-        if field not in data or not data[field]:
-            return jsonify({"error": f"Missing field: {field}"}), 400
-
-    email = data['email']
-    password = data['password']
-    password_hash = hash_password(password)
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM users WHERE email = ? AND password_hash = ?",
-        (email, password_hash)
-    )
-    user = cursor.fetchone()
-    conn.close()
-
-    if user:
-        token = generate_jwt(user["id"], user["email"])
+    full_name = data.get('full_name', '').strip()
+    
+    # Validate email format
+    if not is_valid_email(email):
+        return jsonify({'error': 'Invalid email format'}), 400
+    
+    # Validate password length
+    if len(password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters'}), 400
+    
+    # Hash the password using bcrypt for security
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    
+    db = get_db(current_app)
+    
+    try:
+        # Insert new user into database
+        cursor = db.execute(
+            'INSERT INTO users (email, password_hash, full_name) VALUES (?, ?, ?)',
+            (email, password_hash, full_name if full_name else None)
+        )
+        user_id = cursor.lastrowid
+        
+        # Create a default profile for the user
+        db.execute(
+            'INSERT INTO profiles (user_id) VALUES (?)',
+            (user_id,)
+        )
+        
+        db.commit()
+        
+        # Create JWT access token
+        access_token = create_access_token(identity=user_id)
+        
         return jsonify({
-            "message": "Login successful",
-            "token": token,
-            "user_id": user["id"],
-            "full_name": user["full_name"],
-            "email": user["email"]
+            'message': 'Account created successfully',
+            'access_token': access_token,
+            'user': {
+                'id': user_id,
+                'email': email,
+                'full_name': full_name
+            }
+        }), 201
+        
+    except sqlite3.IntegrityError:
+        # Email already exists
+        return jsonify({'error': 'Email already registered'}), 400
+
+
+@bp.route('/login', methods=['POST'])
+def login():
+    """
+    Authenticate user and return JWT token.
+    
+    Request body (JSON):
+    - email: string (required)
+    - password: string (required)
+    
+    Returns:
+    - 200: Login successful with JWT token
+    - 401: Invalid credentials
+    """
+    data = request.get_json()
+    
+    # Validate required fields
+    if not data or not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    email = data['email'].strip().lower()
+    password = data['password']
+    
+    db = get_db(current_app)
+    
+    # Find user by email
+    user = db.execute(
+        'SELECT id, email, password_hash, full_name FROM users WHERE email = ?',
+        (email,)
+    ).fetchone()
+    
+    # Check if user exists and password matches
+    if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
+        # Create JWT access token
+        access_token = create_access_token(identity=user['id'])
+        
+        return jsonify({
+            'message': 'Login successful',
+            'access_token': access_token,
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'full_name': user['full_name']
+            }
         }), 200
     else:
-        return jsonify({"error": "Invalid email or password"}), 401
+        return jsonify({'error': 'Invalid email or password'}), 401
 
-# --- Example protected route: Profile ---
-@auth_bp.route('/profile', methods=['GET'])
-@token_required
-def get_profile():
-    user_id = request.user['user_id']
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,))
-    profile = cursor.fetchone()
-    conn.close()
-    if profile:
-        return jsonify(dict(profile)), 200
+
+@bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """
+    Logout user.
+    
+    Note: JWT tokens are stateless, so logout is handled on the client side
+    by removing the token from storage. This endpoint confirms the logout.
+    
+    Returns:
+    - 200: Logout successful
+    """
+    return jsonify({'message': 'Logout successful'}), 200
+
+
+@bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    """
+    Get current authenticated user's information.
+    
+    Headers required:
+    - Authorization: Bearer <jwt_token>
+    
+    Returns:
+    - 200: User information
+    - 401: Invalid or missing token
+    """
+    # Get user ID from JWT token
+    user_id = get_jwt_identity()
+    
+    db = get_db(current_app)
+    
+    # Fetch user data
+    user = db.execute(
+        'SELECT id, email, full_name, created_at FROM users WHERE id = ?',
+        (user_id,)
+    ).fetchone()
+    
+    if user:
+        return jsonify({
+            'id': user['id'],
+            'email': user['email'],
+            'full_name': user['full_name'],
+            'created_at': user['created_at']
+        }), 200
     else:
-        return jsonify({"error": "Profile not found"}), 404
+        return jsonify({'error': 'User not found'}), 404
+

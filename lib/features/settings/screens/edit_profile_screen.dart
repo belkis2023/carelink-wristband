@@ -169,9 +169,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         icon: Icons.family_restroom_outlined,
                         items: ['Parent', 'Guardian', 'Caregiver', 'Other'],
                         onChanged: (value) {
-                          setState(() {
-                            _selectedRelationship = value!;
-                          });
+                          if (value != null) {
+                            setState(() {
+                              _selectedRelationship = value;
+                            });
+                          }
                         },
                       ),
                       const SizedBox(height: AppConstants.paddingMedium),
@@ -382,7 +384,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   /// Handles saving the profile changes
   void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState?.validate() ?? false) {
       // In a real app, this would save to a database or API
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -36,7 +36,9 @@ class HistoryScreen extends StatelessWidget {
 
           // Summary Cards Row
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingMedium,
+            ),
             child: Row(
               children: [
                 // Average Stress Card
@@ -71,11 +73,10 @@ class HistoryScreen extends StatelessWidget {
 
           // Notable Events Section
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
-            child: Text(
-              'Notable Events',
-              style: AppTextStyles.heading3,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingMedium,
             ),
+            child: Text('Notable Events', style: AppTextStyles.heading3),
           ),
           const SizedBox(height: AppConstants.paddingSmall),
 
@@ -118,7 +119,7 @@ class HistoryScreen extends StatelessWidget {
               onSurface: AppColors.textPrimary,
             ),
           ),
-          child: child!,
+          child: child ?? const SizedBox.shrink(), // ← FIXED!
         );
       },
     );
@@ -156,23 +157,15 @@ class HistoryScreen extends StatelessWidget {
                 size: AppConstants.iconSmall,
               ),
               const SizedBox(width: 4),
-              Text(
-                title,
-                style: AppTextStyles.bodySmall,
-              ),
+              Text(title, style: AppTextStyles.bodySmall),
             ],
           ),
           const SizedBox(height: AppConstants.paddingSmall),
-          Text(
-            value,
-            style: AppTextStyles.valueMedium,
-          ),
+          Text(value, style: AppTextStyles.valueMedium),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: AppTextStyles.caption.copyWith(
-              color: subtitleColor,
-            ),
+            style: AppTextStyles.caption.copyWith(color: subtitleColor),
           ),
         ],
       ),

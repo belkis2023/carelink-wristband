@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
+import '../../../core/services/api_service.dart';
 
 /// The sign-up screen where new users create an account.
 class SignUpScreen extends StatefulWidget {
@@ -35,18 +36,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   // State variables
   bool _acceptedTerms = false;
+  
+  // API service for backend communication
+  final _apiService = ApiService();
+  
+  // Loading state
   bool _isLoading = false;
-  String _selectedRelationship = 'Parent';
-  DateTime? _selectedDate;
-
-  // Relationship options
-  final List<String> _relationshipOptions = [
-    'Parent',
-    'Guardian',
-    'Caregiver',
-    'Sibling',
-    'Other',
-  ];
 
   @override
   void dispose() {
@@ -93,8 +88,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   /// Handles the account creation process
+  /// Creates an account with the Flask backend
   Future<void> _handleSignUp() async {
-    if (_formKey.currentState?.validate() ?? false) {
+    if (_formKey.currentState?. validate() ?? false) {
       if (!_acceptedTerms) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -109,17 +105,35 @@ class _SignUpScreenState extends State<SignUpScreen> {
         _isLoading = true;
       });
 
-      // TODO: Add backend integration later
-      // For now, just navigate to dashboard
-      await Future.delayed(const Duration(seconds: 1));
+      try {
+        // Call signup API
+        await _apiService.signup(
+          _emailController.text.trim(),
+          _passwordController.text,
+          _nameController.text.trim(),
+        );
 
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+        // Navigate to connection test screen on success
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(AppRouter.connectionTest);
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
-
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 

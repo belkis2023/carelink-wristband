@@ -5,7 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
-import '../../../core/api/carelink_api.dart';
+import '../../../core/services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +18,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  
+  // API service for backend communication
+  final _apiService = ApiService();
+  
+  // Loading state
+  bool _isLoading = false;
 
   String? _message;
   bool _isLoading = false;
@@ -32,32 +38,42 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Handles the sign-in process
+  /// Validates credentials with the Flask backend
   Future<void> _handleSignIn() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() {
-      _isLoading = true;
-      _message = null;
-    });
-
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    final response = await CareLinkApi.login(email, password);
-
-    if (response["token"] != null) {
+    if (_formKey.currentState?. validate() ?? false) {
       setState(() {
-        _message = "Login successful!";
-        _token = response["token"];
+        _isLoading = true;
       });
-      // Directly navigate to dashboard after 500ms for feedback
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.of(
-        context,
-      ).pushReplacementNamed(AppRouter.dashboard, arguments: {"token": _token});
-    } else {
-      setState(() {
-        _message = response["error"] ?? "Login failed";
-      });
+
+      try {
+        // Call login API
+        await _apiService.login(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+
+        // Navigate to connection test screen on success
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(AppRouter.connectionTest);
+        }
+      } catch (e) {
+        // Show error message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
     }
 
     setState(() {
@@ -158,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   CustomButton(
                     text: _isLoading ? 'Signing In...' : 'Sign In',
-                    onPressed: _isLoading ? null : _handleSignIn,
+                    onPressed: _isLoading ? () {} : _handleSignIn,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 
