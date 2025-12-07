@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CareLinkApi {
-  static const String baseUrl = "http://10.47.176.9:5000/auth";
+  static const String baseUrl = "http://172.18.173.196:5000/auth";
 
   // Key for storing token
   static const String _tokenKey = 'jwt_token';
