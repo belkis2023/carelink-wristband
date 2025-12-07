@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class CareLinkApi {
-  static const String baseUrl = "http://127.0.0.1:5000/auth";
+  static const String baseUrl = "http://172.26.112.1:5000/auth";
 
   // Signup
   static Future<Map<String, dynamic>> signup(Map<String, dynamic> data) async {
