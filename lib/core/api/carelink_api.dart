@@ -79,4 +79,25 @@ class CareLinkApi {
     );
     return jsonDecode(res.body);
   }
+
+  // Update Profile (token required)
+  static Future<Map<String, dynamic>> updateProfile(
+    Map<String, dynamic> data,
+  ) async {
+    final token = await getToken();
+
+    if (token == null) {
+      return {"error": "Not authenticated"};
+    }
+
+    final res = await http.put(
+      Uri.parse("$baseUrl/profile"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode(data),
+    );
+    return jsonDecode(res.body);
+  }
 }

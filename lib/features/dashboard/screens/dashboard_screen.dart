@@ -94,6 +94,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           setState(() {
             _currentIndex = index;
           });
+          // Refresh profile when returning to dashboard tab
+          if (index == 0) {
+            _hasFetchedProfile = false;
+            _loadProfile();
+          }
         },
       ),
     );

@@ -4,9 +4,9 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import '../../../shared/widgets/custom_button.dart';
+import '../../../core/api/carelink_api.dart';
 
 /// The edit profile screen for modifying user and monitored individual information.
-/// Allows users to update profile details, emergency contacts, and relationship info.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -19,8 +19,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Text controllers for form fields
-  final _nameController = TextEditingController(text: 'Alex Johnson');
-  final _ageController = TextEditingController(text: '14');
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
   final _dobController = TextEditingController();
   final _emergencyNameController = TextEditingController();
   final _emergencyPhoneController = TextEditingController();
@@ -31,9 +31,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // Date of birth
   DateTime? _selectedDate;
 
+  // Loading states
+  bool _isLoading = true;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  /// Loads the current profile data from the backend
+  Future<void> _loadProfile() async {
+    try {
+      final token = await CareLinkApi.getToken();
+
+      if (token == null) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final response = await CareLinkApi.getProfile(token);
+
+      setState(() {
+        _nameController.text = response['name'] ?? '';
+        _ageController.text = response['age']?.toString() ?? '';
+        _dobController.text = response['date_of_birth'] ?? '';
+        _selectedRelationship = response['relationship'] ?? 'Parent';
+        _emergencyNameController.text =
+            response['emergency_contact_name'] ?? '';
+        _emergencyPhoneController.text =
+            response['emergency_contact_phone'] ?? '';
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading profile: $e'),
+            backgroundColor: AppColors.dangerRed,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
-    // Clean up controllers
     _nameController.dispose();
     _ageController.dispose();
     _dobController.dispose();
@@ -51,167 +100,176 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         showBackButton: true,
       ),
       backgroundColor: AppColors.background,
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: AppConstants.paddingMedium),
-
-                // Profile Avatar Section
-                Center(
-                  child: Stack(
-                    children: [
-                      // Avatar
-                      Container(
-                        width: AppConstants.avatarXLarge,
-                        height: AppConstants.avatarXLarge,
-                        decoration: BoxDecoration(
-                          color: AppColors.lightBlueBackground,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.person,
-                          size: AppConstants.iconXLarge,
-                          color: AppColors.primaryBlue,
-                        ),
-                      ),
-                      // Edit icon overlay
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(AppConstants.paddingSmall),
-                          decoration: BoxDecoration(
-                            color: AppColors.primaryBlue,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.cardBackground,
-                              width: 2,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppConstants.paddingLarge),
-
-                // Form Fields Container
-                Container(
-                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(AppConstants.paddingMedium),
+                child: Form(
+                  key: _formKey,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Full Name Field
-                      _buildTextField(
-                        label: 'Full Name',
-                        controller: _nameController,
-                        icon: Icons.person_outline,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a name';
-                          }
-                          return null;
-                        },
-                      ),
                       const SizedBox(height: AppConstants.paddingMedium),
 
-                      // Age Field
-                      _buildTextField(
-                        label: 'Age',
-                        controller: _ageController,
-                        icon: Icons.cake_outlined,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter an age';
-                          }
-                          final age = int.tryParse(value);
-                          if (age == null || age <= 0) {
-                            return 'Please enter a valid age';
-                          }
-                          return null;
-                        },
+                      // Profile Avatar Section
+                      Center(
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: AppConstants.avatarXLarge,
+                              height: AppConstants.avatarXLarge,
+                              decoration: BoxDecoration(
+                                color: AppColors.lightBlueBackground,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _nameController.text.isNotEmpty
+                                      ? _nameController.text[0].toUpperCase()
+                                      : '? ',
+                                  style: AppTextStyles.heading1.copyWith(
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(
+                                  AppConstants.paddingSmall,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryBlue,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.cardBackground,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: AppConstants.paddingMedium),
+                      const SizedBox(height: AppConstants.paddingLarge),
 
-                      // Date of Birth Field
-                      _buildDateField(
-                        label: 'Date of Birth',
-                        controller: _dobController,
-                        icon: Icons.calendar_today_outlined,
-                      ),
-                      const SizedBox(height: AppConstants.paddingMedium),
+                      // Form Fields Container
+                      Container(
+                        padding: const EdgeInsets.all(
+                          AppConstants.paddingMedium,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(
+                            AppConstants.radiusMedium,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            _buildTextField(
+                              label: 'Full Name',
+                              controller: _nameController,
+                              icon: Icons.person_outline,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter a name';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: AppConstants.paddingMedium),
 
-                      // Relationship to Wearer Dropdown
-                      _buildDropdownField(
-                        label: 'Relationship to Wearer',
-                        value: _selectedRelationship,
-                        icon: Icons.family_restroom_outlined,
-                        items: ['Parent', 'Guardian', 'Caregiver', 'Other'],
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedRelationship = value!;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: AppConstants.paddingMedium),
+                            _buildTextField(
+                              label: 'Age',
+                              controller: _ageController,
+                              icon: Icons.cake_outlined,
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter an age';
+                                }
+                                final age = int.tryParse(value);
+                                if (age == null || age <= 0) {
+                                  return 'Please enter a valid age';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: AppConstants.paddingMedium),
 
-                      // Emergency Contact Name
-                      _buildTextField(
-                        label: 'Emergency Contact Name',
-                        controller: _emergencyNameController,
-                        icon: Icons.contact_emergency_outlined,
-                      ),
-                      const SizedBox(height: AppConstants.paddingMedium),
+                            _buildDateField(
+                              label: 'Date of Birth',
+                              controller: _dobController,
+                              icon: Icons.calendar_today_outlined,
+                            ),
+                            const SizedBox(height: AppConstants.paddingMedium),
 
-                      // Emergency Contact Phone
-                      _buildTextField(
-                        label: 'Emergency Contact Phone',
-                        controller: _emergencyPhoneController,
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
+                            _buildDropdownField(
+                              label: 'Relationship to Wearer',
+                              value: _selectedRelationship,
+                              icon: Icons.family_restroom_outlined,
+                              items: [
+                                'Parent',
+                                'Guardian',
+                                'Caregiver',
+                                'Sibling',
+                                'Other',
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedRelationship = value!;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: AppConstants.paddingMedium),
+
+                            _buildTextField(
+                              label: 'Emergency Contact Name',
+                              controller: _emergencyNameController,
+                              icon: Icons.contact_emergency_outlined,
+                            ),
+                            const SizedBox(height: AppConstants.paddingMedium),
+
+                            _buildTextField(
+                              label: 'Emergency Contact Phone',
+                              controller: _emergencyPhoneController,
+                              icon: Icons.phone_outlined,
+                              keyboardType: TextInputType.phone,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: AppConstants.paddingLarge),
+
+                      CustomButton(
+                        text: _isSaving ? 'Saving...' : 'Save Changes',
+                        onPressed: _isSaving ? () {} : _saveChanges,
+                        type: ButtonType.primary,
+                      ),
+                      const SizedBox(height: AppConstants.paddingLarge),
                     ],
                   ),
                 ),
-                const SizedBox(height: AppConstants.paddingLarge),
-
-                // Save Changes Button
-                CustomButton(
-                  text: 'Save Changes',
-                  onPressed: _saveChanges,
-                  type: ButtonType.primary,
-                ),
-                const SizedBox(height: AppConstants.paddingLarge),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 
-  /// Builds a standard text field
   Widget _buildTextField({
     required String label,
     required TextEditingController controller,
@@ -250,7 +308,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
-              borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
+              borderSide: const BorderSide(
+                color: AppColors.primaryBlue,
+                width: 2,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
@@ -266,7 +327,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  /// Builds a date picker field
   Widget _buildDateField({
     required String label,
     required TextEditingController controller,
@@ -316,7 +376,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
-              borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
+              borderSide: const BorderSide(
+                color: AppColors.primaryBlue,
+                width: 2,
+              ),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppConstants.paddingMedium,
@@ -328,7 +391,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  /// Builds a dropdown field
   Widget _buildDropdownField({
     required String label,
     required String value,
@@ -362,7 +424,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
-              borderSide: const BorderSide(color: AppColors.primaryBlue, width: 2),
+              borderSide: const BorderSide(
+                color: AppColors.primaryBlue,
+                width: 2,
+              ),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: AppConstants.paddingMedium,
@@ -370,27 +435,63 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           items: items.map((String item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            );
+            return DropdownMenuItem<String>(value: item, child: Text(item));
           }).toList(),
         ),
       ],
     );
   }
 
-  /// Handles saving the profile changes
-  void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
-      // In a real app, this would save to a database or API
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated successfully'),
-          backgroundColor: AppColors.successGreen,
-        ),
-      );
-      Navigator.of(context).pop();
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final profileData = {
+        'name': _nameController.text.trim(),
+        'age': _ageController.text.trim(),
+        'date_of_birth': _dobController.text,
+        'relationship': _selectedRelationship,
+        'emergency_contact_name': _emergencyNameController.text.trim(),
+        'emergency_contact_phone': _emergencyPhoneController.text.trim(),
+      };
+
+      final response = await CareLinkApi.updateProfile(profileData);
+
+      if (mounted) {
+        if (response['message'] != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile updated successfully'),
+              backgroundColor: AppColors.successGreen,
+            ),
+          );
+          Navigator.of(context).pop();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['error'] ?? 'Update failed'),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.dangerRed,
+          ),
+        );
+      }
     }
+
+    setState(() {
+      _isSaving = false;
+    });
   }
 }

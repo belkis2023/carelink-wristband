@@ -157,3 +157,37 @@ def get_profile():
         return jsonify(dict(profile)), 200
     else:
         return jsonify({"error": "Profile not found"}), 404
+    
+# --- Update Profile route ---
+@auth_bp.route('/profile', methods=['PUT'])
+@token_required
+def update_profile():
+    user_id = request.user['user_id']
+    data = request.get_json()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Update profile fields
+    cursor.execute(
+        """
+        UPDATE profiles 
+        SET name = ?, age = ?, date_of_birth = ?, relationship = ?, 
+            emergency_contact_name = ?, emergency_contact_phone = ? 
+        WHERE user_id = ?
+        """,
+        (
+            data.get('name', ''),
+            data.get('age', ''),
+            data.get('date_of_birth', ''),
+            data.get('relationship', ''),
+            data.get('emergency_contact_name', ''),
+            data.get('emergency_contact_phone', ''),
+            user_id
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Profile updated successfully"}), 200

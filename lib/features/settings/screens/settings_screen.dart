@@ -197,11 +197,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 SettingsMenuItem(
-                  title: 'Export Health Data',
-                  subtitle: 'Download your monitoring data',
-                  icon: Icons.download_rounded,
-                  onTap: () {
-                    _showComingSoonSnackbar(context, 'Export Health Data');
+                  title: 'Edit Profile',
+                  icon: Icons.edit_rounded,
+                  onTap: () async {
+                    // Wait for edit screen to close
+                    await Navigator.of(
+                      context,
+                    ).pushNamed(AppRouter.editProfile);
+                    // Refresh profile data when returning
+                    setState(() {
+                      _hasFetchedProfile = false;
+                    });
+                    _loadProfile();
                   },
                 ),
                 const Divider(height: 1),
