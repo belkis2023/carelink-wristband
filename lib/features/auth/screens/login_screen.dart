@@ -7,8 +7,6 @@ import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
 import '../../../core/services/api_service.dart';
 
-/// The login screen where users sign in to the CareLink Wristband app.
-/// This is the first screen users see when opening the app.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -17,7 +15,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controllers to manage text input
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -28,9 +25,14 @@ class _LoginScreenState extends State<LoginScreen> {
   // Loading state
   bool _isLoading = false;
 
+  String? _message;
+  bool _isLoading = false;
+
+  // JWT token stored in memory for now:
+  String? _token;
+
   @override
   void dispose() {
-    // Clean up controllers when the widget is disposed
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -73,6 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     }
+
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   @override
@@ -89,8 +95,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: AppConstants.paddingXLarge),
-
-                  // App Logo and Title
                   Icon(
                     Icons.watch_rounded,
                     size: 80,
@@ -109,12 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppConstants.paddingXLarge * 1.5),
-
-                  // Welcome Text
-                  Text(
-                    'Welcome Back',
-                    style: AppTextStyles.heading2,
-                  ),
+                  Text('Welcome Back', style: AppTextStyles.heading2),
                   const SizedBox(height: AppConstants.paddingSmall),
                   Text(
                     'Sign in to continue monitoring',
@@ -122,7 +121,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 
-                  // Email Input
                   AuthTextField(
                     labelText: 'Email',
                     hintText: 'Enter your email',
@@ -130,18 +128,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     controller: _emailController,
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if (value == null || value.isEmpty)
                         return 'Please enter your email';
-                      }
-                      if (!value.contains('@')) {
+                      if (!value.contains('@'))
                         return 'Please enter a valid email';
-                      }
                       return null;
                     },
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Password Input
                   AuthTextField(
                     labelText: 'Password',
                     hintText: 'Enter your password',
@@ -149,23 +144,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     isPassword: true,
                     controller: _passwordController,
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if (value == null || value.isEmpty)
                         return 'Please enter your password';
-                      }
-                      if (value.length < 6) {
+                      if (value.length < 6)
                         return 'Password must be at least 6 characters';
-                      }
                       return null;
                     },
                   ),
                   const SizedBox(height: AppConstants.paddingSmall),
 
-                  // Forgot Password Link
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () {
-                        Navigator.of(context).pushNamed(AppRouter.forgotPassword);
+                        Navigator.of(
+                          context,
+                        ).pushNamed(AppRouter.forgotPassword);
                       },
                       child: Text(
                         'Forgot Password?',
@@ -178,14 +172,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: AppConstants.paddingMedium),
 
-                  // Sign In Button
                   CustomButton(
                     text: _isLoading ? 'Signing In...' : 'Sign In',
                     onPressed: _isLoading ? () {} : _handleSignIn,
                   ),
                   const SizedBox(height: AppConstants.paddingLarge),
 
-                  // Sign Up Link
+                  if (_message != null)
+                    Text(
+                      _message!,
+                      style: TextStyle(
+                        color: _message == "Login successful!"
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
