@@ -31,7 +31,10 @@ class AppRouter {
       case forgotPassword:
         return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());
       case dashboard:
-        return MaterialPageRoute(builder: (_) => const DashboardScreen());
+        return MaterialPageRoute(
+          builder: (_) => const DashboardScreen(),
+          settings: routeSettings,
+        );
       case history:
         return MaterialPageRoute(builder: (_) => const HistoryScreen());
       case alerts:

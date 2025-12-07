@@ -11,6 +11,7 @@ import '../widgets/haptic_toggle_card.dart';
 import '../../history/screens/history_screen.dart';
 import '../../alerts/screens/alerts_screen.dart';
 import '../../settings/screens/settings_screen.dart';
+import '../../../core/api/carelink_api.dart';
 
 /// The main dashboard screen showing real-time monitoring data.
 /// This is the primary screen users see after logging in.
@@ -25,6 +26,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Current tab index for bottom navigation
   int _currentIndex = 0;
 
+  // Profile data
+  String _patientName = 'Loading...';
+  bool _isLoading = true;
+  bool _hasFetchedProfile = false;
+
   // List of screens for each tab
   final List<Widget> _screens = const [
     _DashboardContent(),
@@ -33,11 +39,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
     SettingsScreen(),
   ];
 
+  /// Fetches the profile data from the backend
+  Future<void> _loadProfile(String token) async {
+    try {
+      final response = await CareLinkApi.getProfile(token);
+
+      if (response['name'] != null && response['name'].toString().isNotEmpty) {
+        setState(() {
+          _patientName = response['name'];
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _patientName = 'Patient';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _patientName = 'Patient';
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Get token from route arguments
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final token = args?['token'] as String?;
+
+    // Fetch profile only once when token is available
+    if (!_hasFetchedProfile && token != null) {
+      _hasFetchedProfile = true;
+      _loadProfile(token);
+    }
+
     return Scaffold(
-      appBar: const CustomAppBar(
-        title: "Alex's Monitor",
+      appBar: CustomAppBar(
+        title: _isLoading ? "Loading..." : "$_patientName's Monitor",
         showConnectionStatus: true,
         isConnected: true,
       ),
@@ -60,6 +101,8 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    print('DEBUG args: $args');
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,14 +111,13 @@ class _DashboardContent extends StatelessWidget {
 
           // Current Status Section Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingMedium,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Current Status',
-                  style: AppTextStyles.heading2,
-                ),
+                Text('Current Status', style: AppTextStyles.heading2),
                 const SizedBox(height: 4),
                 Text(
                   'Real-time monitoring data',
@@ -87,15 +129,14 @@ class _DashboardContent extends StatelessWidget {
           const SizedBox(height: AppConstants.paddingMedium),
 
           // Stress Level Card
-          const StressLevelCard(
-            stressLevel: 6.2,
-            status: 'Moderate',
-          ),
+          const StressLevelCard(stressLevel: 6.2, status: 'Moderate'),
           const SizedBox(height: AppConstants.paddingMedium),
 
           // Metrics Grid (2x2 grid of metric cards)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingMedium,
+            ),
             child: GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -150,10 +191,7 @@ class _DashboardContent extends StatelessWidget {
                       size: AppConstants.iconMedium,
                     ),
                     const SizedBox(width: AppConstants.paddingSmall),
-                    Text(
-                      'About These Metrics',
-                      style: AppTextStyles.heading3,
-                    ),
+                    Text('About These Metrics', style: AppTextStyles.heading3),
                   ],
                 ),
                 const SizedBox(height: AppConstants.paddingMedium),
@@ -203,10 +241,7 @@ class _DashboardContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          description,
-          style: AppTextStyles.bodySmall,
-        ),
+        Text(description, style: AppTextStyles.bodySmall),
       ],
     );
   }

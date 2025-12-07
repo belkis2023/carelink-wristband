@@ -49,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _message = "Login successful!";
         _token = response["token"];
       });
+      print('DEBUG login token: $_token');
       // Directly navigate to dashboard after 500ms for feedback
       await Future.delayed(const Duration(milliseconds: 500));
       Navigator.of(
