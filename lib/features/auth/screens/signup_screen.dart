@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
+import '../../../core/api/carelink_api.dart';
 
 /// The sign-up screen where new users create an account.
 class SignUpScreen extends StatefulWidget {
@@ -93,6 +94,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   /// Handles the account creation process
+
+  /// Handles the account creation process
   Future<void> _handleSignUp() async {
     if (_formKey.currentState?.validate() ?? false) {
       if (!_acceptedTerms) {
@@ -109,12 +112,70 @@ class _SignUpScreenState extends State<SignUpScreen> {
         _isLoading = true;
       });
 
-      // TODO: Add backend integration later
-      // For now, just navigate to dashboard
-      await Future.delayed(const Duration(seconds: 1));
+      try {
+        // Prepare the signup data
+        final signupData = {
+          // Required fields
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+          'full_name': _nameController.text.trim(),
 
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+          // Profile fields (monitored person)
+          'name': _monitoredNameController.text.trim(),
+          'date_of_birth': _dobController.text,
+          'relationship': _selectedRelationship,
+          'emergency_contact_name': _emergencyNameController.text.trim(),
+          'emergency_contact_phone': _emergencyPhoneController.text.trim(),
+        };
+
+        // Calculate age from date of birth if available
+        if (_selectedDate != null) {
+          final now = DateTime.now();
+          int age = now.year - _selectedDate!.year;
+          if (now.month < _selectedDate!.month ||
+              (now.month == _selectedDate!.month &&
+                  now.day < _selectedDate!.day)) {
+            age--;
+          }
+          signupData['age'] = age.toString();
+        }
+
+        // Call the API
+        final response = await CareLinkApi.signup(signupData);
+
+        if (response['user_id'] != null) {
+          // Signup successful
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Account created successfully!  Please log in.'),
+                backgroundColor: AppColors.successGreen,
+              ),
+            );
+            // Navigate back to login screen
+            Navigator.of(context).pop();
+          }
+        } else {
+          // Signup failed - show error
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(response['error'] ?? 'Signup failed'),
+                backgroundColor: AppColors.dangerRed,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        // Network or other error
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Connection error: $e'),
+              backgroundColor: AppColors.dangerRed,
+            ),
+          );
+        }
       }
 
       setState(() {
