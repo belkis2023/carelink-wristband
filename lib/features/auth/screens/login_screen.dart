@@ -42,22 +42,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    final response = await CareLinkApi.login(email, password);
+    try {
+      final response = await CareLinkApi.login(email, password);
 
-    if (response["token"] != null) {
+      if (response["token"] != null) {
+        setState(() {
+          _message = "Login successful! ";
+        });
+
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+      } else {
+        setState(() {
+          _message = response["error"] ?? "Login failed";
+        });
+      }
+    } catch (e) {
       setState(() {
-        _message = "Login successful!";
-        _token = response["token"];
-      });
-      print('DEBUG login token: $_token');
-      // Directly navigate to dashboard after 500ms for feedback
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.of(
-        context,
-      ).pushReplacementNamed(AppRouter.dashboard, arguments: {"token": _token});
-    } else {
-      setState(() {
-        _message = response["error"] ?? "Login failed";
+        _message = "Connection error: $e";
       });
     }
 

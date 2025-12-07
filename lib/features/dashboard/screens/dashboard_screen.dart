@@ -40,8 +40,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ];
 
   /// Fetches the profile data from the backend
-  Future<void> _loadProfile(String token) async {
+  Future<void> _loadProfile() async {
     try {
+      final token = await CareLinkApi.getToken();
+
+      if (token == null) {
+        setState(() {
+          _patientName = 'Unknown';
+          _isLoading = false;
+        });
+        return;
+      }
+
       final response = await CareLinkApi.getProfile(token);
 
       if (response['name'] != null && response['name'].toString().isNotEmpty) {
@@ -65,15 +75,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Get token from route arguments
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    final token = args?['token'] as String?;
-
-    // Fetch profile only once when token is available
-    if (!_hasFetchedProfile && token != null) {
+    // Fetch profile only once
+    if (!_hasFetchedProfile) {
       _hasFetchedProfile = true;
-      _loadProfile(token);
+      _loadProfile();
     }
 
     return Scaffold(
@@ -101,8 +106,6 @@ class _DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)?.settings.arguments;
-    print('DEBUG args: $args');
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -8,6 +8,7 @@ import '../widgets/profile_card.dart';
 import '../widgets/wristband_controls_card.dart';
 import '../widgets/threshold_slider.dart';
 import '../widgets/settings_menu_item.dart';
+import '../../../core/api/carelink_api.dart';
 
 /// The settings screen for configuring app preferences, thresholds, and account settings.
 class SettingsScreen extends StatefulWidget {
@@ -169,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(height: 1),
                 SettingsMenuItem(
                   title: 'About This App',
-                  subtitle: 'Version 1.0.0',
+                  subtitle: 'Version 1.0. 0',
                   icon: Icons.info_rounded,
                   onTap: () {
                     _showAboutDialog(context);
@@ -230,7 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('About CareLink Wristband'),
         content: const Text(
-          'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support well-being.\n\nVersion: 1.0.0\n\nDeveloped with ❤️ for caregivers and individuals.',
+          'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support well-being.\n\nVersion: 1.0. 0\n\nDeveloped with love for caregivers and individuals.',
         ),
         actions: [
           TextButton(
@@ -255,23 +256,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               // Close the dialog first
               Navigator.of(dialogContext).pop();
 
-              // Navigate to login screen using root navigator
-              Navigator.of(
-                context,
-                rootNavigator: true,
-              ).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+              // Clear the token
+              await CareLinkApi.clearToken();
 
-              // Show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Signed out successfully'),
-                  backgroundColor: AppColors.successGreen,
-                ),
-              );
+              // Navigate to login screen using root navigator
+              if (context.mounted) {
+                Navigator.of(
+                  context,
+                  rootNavigator: true,
+                ).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
+              }
             },
             child: const Text(
               'Sign Out',
