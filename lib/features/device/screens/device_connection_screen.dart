@@ -1,9 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/services/ble/ble_service.dart';
 import '../../../navigation/app_router.dart';
 
 class DeviceConnectionScreen extends StatefulWidget {
@@ -14,82 +13,111 @@ class DeviceConnectionScreen extends StatefulWidget {
 }
 
 class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
-  final BleService _bleService = BleService();
   List<ScanResult> _devices = [];
   bool _isScanning = false;
   bool _isConnecting = false;
   String? _errorMessage;
+  StreamSubscription? _scanSubscription;
 
   @override
   void initState() {
     super.initState();
-    _setupListeners();
     _startScan();
   }
 
-  void _setupListeners() {
-    // Listen for connection state changes
-    _bleService.connectionState.listen((state) {
-      if (mounted) {
-        setState(() {
-          _isScanning = state == BleConnectionState.scanning;
-          _isConnecting = state == BleConnectionState.connecting;
-        });
-
-        if (state == BleConnectionState.connected) {
-          Navigator.pushReplacementNamed(context, AppRouter.dashboard);
-        }
-
-        if (state == BleConnectionState.error && !_isScanning) {
-          setState(() {
-            _errorMessage = 'Connection failed. Please try again.';
-          });
-        }
-      }
-    });
-
-    // Listen for discovered devices
-    _bleService.discoveredDevices.listen((devices) {
-      print('UI: Received ${devices.length} devices');
-      if (mounted) {
-        setState(() {
-          _devices = devices;
-        });
-      }
-    });
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    FlutterBluePlus.stopScan();
+    super.dispose();
   }
 
   Future<void> _startScan() async {
     setState(() {
-      _errorMessage = null;
       _devices = [];
+      _errorMessage = null;
+      _isScanning = true;
     });
 
-    // Check if Bluetooth is on
-    final adapterState = await FlutterBluePlus.adapterState.first;
-    if (adapterState != BluetoothAdapterState.on) {
-      setState(() {
-        _errorMessage = 'Please turn on Bluetooth';
+    try {
+      // Check Bluetooth
+      final adapterState = await FlutterBluePlus.adapterState.first;
+      if (adapterState != BluetoothAdapterState.on) {
+        setState(() {
+          _errorMessage = 'Please turn on Bluetooth';
+          _isScanning = false;
+        });
+        return;
+      }
+
+      // Cancel previous subscription
+      await _scanSubscription?.cancel();
+
+      // Collect devices in a map to avoid duplicates
+      final Map<String, ScanResult> deviceMap = {};
+
+      // Listen to results
+      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+        for (var result in results) {
+          deviceMap[result.device.remoteId.str] = result;
+        }
       });
 
-      // Try to turn on Bluetooth (Android only)
-      await FlutterBluePlus.turnOn();
-      return;
-    }
+      // Scan for 8 seconds
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
 
-    await _bleService.startScan();
+      // After scan completes, update UI once
+      if (mounted) {
+        final deviceList = deviceMap.values.toList();
+
+        // Sort: named devices first
+        deviceList.sort((a, b) {
+          final aName = a.device.platformName;
+          final bName = b.device.platformName;
+          if (aName.isNotEmpty && bName.isEmpty) return -1;
+          if (aName.isEmpty && bName.isNotEmpty) return 1;
+          return b.rssi.compareTo(a.rssi);
+        });
+
+        setState(() {
+          _devices = deviceList;
+          _isScanning = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Scan error: $e';
+          _isScanning = false;
+        });
+      }
+    }
   }
 
-  Future<void> _connectToDevice(BluetoothDevice device) async {
+  Future<void> _connect(BluetoothDevice device) async {
+    final name = device.platformName.isNotEmpty
+        ? device.platformName
+        : 'Device';
+
     setState(() {
+      _isConnecting = true;
       _errorMessage = null;
     });
 
-    final success = await _bleService.connectToDevice(device);
-    if (!success) {
-      setState(() {
-        _errorMessage = 'Failed to connect.  Please try again.';
-      });
+    try {
+      await FlutterBluePlus.stopScan();
+      await device.connect(timeout: const Duration(seconds: 10));
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRouter.dashboard);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to connect to $name';
+          _isConnecting = false;
+        });
+      }
     }
   }
 
@@ -102,231 +130,203 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
         backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppConstants.paddingMedium),
-          child: Column(
-            children: [
-              const SizedBox(height: AppConstants.paddingMedium),
-
-              // Header
-              Icon(
-                Icons.bluetooth_searching,
-                size: 60,
-                color: AppColors.primaryBlue,
-              ),
-              const SizedBox(height: AppConstants.paddingMedium),
-              Text(
-                'Find Your Wristband',
-                style: AppTextStyles.heading2,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppConstants.paddingSmall),
-              Text(
-                'Select your CareLink wristband from the list below',
-                style: AppTextStyles.subtitle,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppConstants.paddingMedium),
-
-              // Error message
-              if (_errorMessage != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  margin: const EdgeInsets.only(
-                    bottom: AppConstants.paddingMedium,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.dangerRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.radiusMedium,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, color: AppColors.dangerRed),
-                      const SizedBox(width: AppConstants.paddingSmall),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: TextStyle(color: AppColors.dangerRed),
-                        ),
-                      ),
-                    ],
-                  ),
+      body: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.bluetooth_searching,
+                  size: 48,
+                  color: AppColors.primaryBlue,
                 ),
-
-              // Device list or status
-              Expanded(child: _buildContent()),
-
-              // Buttons at bottom
-              const SizedBox(height: AppConstants.paddingMedium),
-
-              // Scan button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: (_isScanning || _isConnecting) ? null : _startScan,
-                  icon: _isScanning
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.refresh),
-                  label: Text(_isScanning ? 'Scanning...' : 'Scan for Devices'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppConstants.paddingSmall),
-
-              // Skip button (for testing)
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacementNamed(context, AppRouter.dashboard);
-                },
-                child: Text(
-                  'Skip for now',
+                const SizedBox(height: 8),
+                Text('Select Your Wristband', style: AppTextStyles.heading2),
+                const SizedBox(height: 4),
+                Text(
+                  _isScanning
+                      ? 'Scanning...'
+                      : '${_devices.length} devices found',
                   style: TextStyle(color: AppColors.textSecondary),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    if (_isScanning) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Scanning for Bluetooth devices...'),
-          ],
-        ),
-      );
-    }
-
-    if (_isConnecting) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Connecting... '),
-          ],
-        ),
-      );
-    }
-
-    if (_devices.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.bluetooth_disabled,
-              size: 64,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(height: 16),
-            Text('No devices found', style: AppTextStyles.bodyLarge),
-            const SizedBox(height: 8),
-            Text(
-              'Make sure Bluetooth is on and your\nwristband is nearby',
-              style: TextStyle(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Show list of ALL discovered devices
-    return ListView.builder(
-      itemCount: _devices.length,
-      itemBuilder: (context, index) {
-        final result = _devices[index];
-        final device = result.device;
-        final name = device.platformName.isNotEmpty
-            ? device.platformName
-            : 'Unknown Device';
-        final rssi = result.rssi;
-
-        // Highlight CareLink devices
-        final isCareLink = name.toLowerCase().contains('carelink');
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: isCareLink
-                ? BorderSide(color: AppColors.primaryBlue, width: 2)
-                : BorderSide.none,
-          ),
-          child: ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isCareLink
-                    ? AppColors.primaryBlue.withOpacity(0.1)
-                    : AppColors.lightBlueBackground,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                isCareLink ? Icons.watch : Icons.bluetooth,
-                color: isCareLink
-                    ? AppColors.primaryBlue
-                    : AppColors.textSecondary,
-              ),
-            ),
-            title: Text(
-              name,
-              style: TextStyle(
-                fontWeight: isCareLink ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('ID: ${device.remoteId}'),
-                Text('Signal: $rssi dBm'),
-                if (isCareLink)
-                  Text(
-                    '✓ CareLink Wristband',
-                    style: TextStyle(
-                      color: AppColors.successGreen,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
               ],
             ),
-            trailing: ElevatedButton(
-              onPressed: _isConnecting ? null : () => _connectToDevice(device),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isCareLink
-                    ? AppColors.primaryBlue
-                    : AppColors.secondaryBlue,
-              ),
-              child: const Text('Connect'),
-            ),
-            isThreeLine: true,
           ),
-        );
-      },
+
+          // Progress bar
+          if (_isScanning) const LinearProgressIndicator(),
+
+          // Error
+          if (_errorMessage != null)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
+          // Device list
+          Expanded(
+            child: _devices.isEmpty
+                ? Center(
+                    child: _isScanning
+                        ? const CircularProgressIndicator()
+                        : const Text(
+                            'No devices found.  Tap Scan to try again.',
+                          ),
+                  )
+                : ListView.builder(
+                    itemCount: _devices.length,
+                    itemBuilder: (context, index) {
+                      final result = _devices[index];
+                      final device = result.device;
+                      final name = device.platformName.isNotEmpty
+                          ? device.platformName
+                          : 'Unknown Device';
+                      final isCareLink = name.toLowerCase().contains(
+                        'carelink',
+                      );
+
+                      return Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isCareLink
+                              ? Border.all(
+                                  color: AppColors.primaryBlue,
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              // Icon
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: isCareLink
+                                      ? AppColors.primaryBlue.withOpacity(0.1)
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isCareLink ? Icons.watch : Icons.bluetooth,
+                                  color: isCareLink
+                                      ? AppColors.primaryBlue
+                                      : Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+
+                              // Name and signal
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontWeight: isCareLink
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Signal: ${result.rssi} dBm',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Connect button
+                              SizedBox(
+                                width: 80,
+                                height: 36,
+                                child: ElevatedButton(
+                                  onPressed: _isConnecting
+                                      ? null
+                                      : () => _connect(device),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isCareLink
+                                        ? AppColors.primaryBlue
+                                        : AppColors.secondaryBlue,
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  child: const Text(
+                                    'Connect',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Bottom buttons
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (_isScanning || _isConnecting)
+                        ? null
+                        : _startScan,
+                    icon: _isScanning
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.refresh),
+                    label: Text(_isScanning ? 'Scanning...' : 'Scan Again'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pushReplacementNamed(
+                    context,
+                    AppRouter.dashboard,
+                  ),
+                  child: const Text('Skip for now'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
