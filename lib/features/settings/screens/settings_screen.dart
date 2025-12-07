@@ -8,7 +8,6 @@ import '../widgets/profile_card.dart';
 import '../widgets/wristband_controls_card.dart';
 import '../widgets/threshold_slider.dart';
 import '../widgets/settings_menu_item.dart';
-import '../../../core/api/carelink_api.dart';
 
 /// The settings screen for configuring app preferences, thresholds, and account settings.
 class SettingsScreen extends StatefulWidget {
@@ -22,50 +21,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Track whether push notifications are enabled
   bool _pushNotificationsEnabled = true;
 
-  // Profile data
-  String _patientName = 'Loading...';
-  String _patientAge = '--';
-  bool _isLoading = true;
-  bool _hasFetchedProfile = false;
-
-  /// Fetches the profile data from the backend
-  Future<void> _loadProfile() async {
-    try {
-      final token = await CareLinkApi.getToken();
-
-      if (token == null) {
-        setState(() {
-          _patientName = 'Unknown';
-          _patientAge = '--';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final response = await CareLinkApi.getProfile(token);
-
-      setState(() {
-        _patientName = response['name'] ?? 'Patient';
-        _patientAge = response['age']?.toString() ?? '--';
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _patientName = 'Patient';
-        _patientAge = '--';
-        _isLoading = false;
-      });
-    }
-  }
+  // ============ STATIC PATIENT DATA (Tunisian) ============
+  // Change these values for your demo/client presentation
+  static const String patientName = "Fatma Ben Ali";
+  static const String patientAge = "68";
+  static const String patientEmail = "fatma.benali@email. tn";
+  static const String patientPhone = "+216 98 765 432";
+  static const String emergencyContact = "Ahmed Ben Ali";
+  static const String emergencyPhone = "+216 55 123 456";
+  // ========================================================
 
   @override
   Widget build(BuildContext context) {
-    // Fetch profile only once
-    if (!_hasFetchedProfile) {
-      _hasFetchedProfile = true;
-      _loadProfile();
-    }
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,12 +41,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Monitored Individual Section
           _buildSectionHeader('Monitored Individual'),
-          _isLoading
-              ? const Padding(
-                  padding: EdgeInsets.all(AppConstants.paddingMedium),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              : ProfileCard(name: _patientName, age: _patientAge),
+          const ProfileCard(name: patientName, age: patientAge),
           const SizedBox(height: AppConstants.paddingSmall),
 
           // Edit Profile Menu Item
@@ -102,8 +64,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Edit Profile',
               icon: Icons.edit_rounded,
               onTap: () {
-                Navigator.of(context).pushNamed(AppRouter.editProfile);
+                _showDemoModeSnackbar(context);
               },
+            ),
+          ),
+          const SizedBox(height: AppConstants.paddingLarge),
+
+          // Contact Information Section (NEW!)
+          _buildSectionHeader('Contact Information'),
+          CustomCard(
+            child: Column(
+              children: [
+                _buildInfoRow(Icons.email_rounded, 'Email', patientEmail),
+                const Divider(height: 24),
+                _buildInfoRow(Icons.phone_rounded, 'Phone', patientPhone),
+                const Divider(height: 24),
+                _buildInfoRow(
+                  Icons.emergency_rounded,
+                  'Emergency Contact',
+                  emergencyContact,
+                ),
+                const Divider(height: 24),
+                _buildInfoRow(
+                  Icons.phone_in_talk_rounded,
+                  'Emergency Phone',
+                  emergencyPhone,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppConstants.paddingLarge),
@@ -160,6 +147,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: AppConstants.paddingLarge),
 
+                // Heart Rate Alert Thresholds (NEW!)
+                ThresholdSlider(
+                  label: 'High Heart Rate Alert',
+                  initialValue: 100.0,
+                  min: 80.0,
+                  max: 120.0,
+                  divisions: 40,
+                  unit: ' BPM',
+                  onChanged: (value) {
+                    // Handle threshold change
+                  },
+                ),
+                const SizedBox(height: AppConstants.paddingLarge),
+
                 // Noise Level Threshold Slider
                 ThresholdSlider(
                   label: 'Noise Level Threshold',
@@ -197,18 +198,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 SettingsMenuItem(
-                  title: 'Edit Profile',
-                  icon: Icons.edit_rounded,
-                  onTap: () async {
-                    // Wait for edit screen to close
-                    await Navigator.of(
-                      context,
-                    ).pushNamed(AppRouter.editProfile);
-                    // Refresh profile data when returning
-                    setState(() {
-                      _hasFetchedProfile = false;
-                    });
-                    _loadProfile();
+                  title: 'Export Health Data',
+                  subtitle: 'Download your monitoring history',
+                  icon: Icons.download_rounded,
+                  onTap: () {
+                    _showDemoModeSnackbar(context);
                   },
                 ),
                 const Divider(height: 1),
@@ -217,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Manage data sharing preferences',
                   icon: Icons.privacy_tip_rounded,
                   onTap: () {
-                    _showComingSoonSnackbar(context, 'Privacy Settings');
+                    _showDemoModeSnackbar(context);
                   },
                 ),
                 const Divider(height: 1),
@@ -239,20 +233,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.paddingMedium,
             ),
-            child: OutlinedButton(
-              onPressed: () {
-                _showSignOutDialog(context);
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.dangerRed,
-                side: const BorderSide(color: AppColors.dangerRed, width: 2),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  _showSignOutDialog(context);
+                },
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Sign Out'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.dangerRed,
+                  side: const BorderSide(color: AppColors.dangerRed, width: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
-              child: const Text('Sign Out'),
             ),
           ),
           const SizedBox(height: AppConstants.paddingXLarge),
         ],
       ),
+    );
+  }
+
+  /// Builds an info row with icon, label and value
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, color: AppColors.primaryBlue, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -267,12 +296,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  /// Shows a snackbar for features not yet implemented
-  void _showComingSoonSnackbar(BuildContext context, String feature) {
+  /// Shows a snackbar for demo mode
+  void _showDemoModeSnackbar(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$feature - Coming Soon!'),
+        content: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Demo Mode - Feature disabled'),
+          ],
+        ),
         backgroundColor: AppColors.primaryBlue,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -282,9 +318,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('About CareLink Wristband'),
-        content: const Text(
-          'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support well-being.\n\nVersion: 1. 0.0\n\nDeveloped with love for caregivers and individuals.',
+        title: Row(
+          children: [
+            Icon(Icons.watch_rounded, color: AppColors.primaryBlue),
+            const SizedBox(width: 8),
+            const Text('CareLink Wristband'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support the well-being of elderly patients.',
+            ),
+            SizedBox(height: 16),
+            Text('Version: 1.0.0'),
+            SizedBox(height: 8),
+            Text('Developed in Tunisia 🇹🇳'),
+            SizedBox(height: 8),
+            Text('© 2024 CareLink Team'),
+          ],
         ),
         actions: [
           TextButton(
@@ -309,20 +363,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              // Close the dialog first
+            onPressed: () {
+              // Close the dialog
               Navigator.of(dialogContext).pop();
-
-              // Clear the token
-              await CareLinkApi.clearToken();
-
-              // Navigate to login screen using root navigator
-              if (context.mounted) {
-                Navigator.of(
-                  context,
-                  rootNavigator: true,
-                ).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
-              }
+              // Navigate to login screen
+              Navigator.of(
+                context,
+                rootNavigator: true,
+              ).pushNamedAndRemoveUntil(AppRouter.login, (route) => false);
             },
             child: const Text(
               'Sign Out',

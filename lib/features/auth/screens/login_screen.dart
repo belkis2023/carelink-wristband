@@ -5,7 +5,6 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/auth_text_field.dart';
 import '../../../navigation/app_router.dart';
-import '../../../core/api/carelink_api.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,9 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _message;
   bool _isLoading = false;
 
-  // JWT token stored in memory for now:
-  String? _token;
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -33,34 +29,29 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleSignIn() async {
+    // Validate form (email format, password length)
     if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
       _message = null;
     });
 
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
+    // Simulate a brief loading delay (looks more realistic)
+    await Future.delayed(const Duration(milliseconds: 800));
 
-    try {
-      final response = await CareLinkApi.login(email, password);
+    // OFFLINE MODE: Accept any valid credentials!
+    // No backend needed - just validate the format
+    setState(() {
+      _message = "Login successful! ";
+    });
 
-      if (response["token"] != null) {
-        setState(() {
-          _message = "Login successful! ";
-        });
+    // Wait a moment so user sees success message
+    await Future.delayed(const Duration(milliseconds: 500));
 
-        await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.of(context).pushReplacementNamed(AppRouter.deviceConnection);
-      } else {
-        setState(() {
-          _message = response["error"] ?? "Login failed";
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _message = "Connection error: $e";
-      });
+    // Navigate to device connection screen
+    if (mounted) {
+      Navigator.of(context).pushReplacementNamed(AppRouter.deviceConnection);
     }
 
     setState(() {
@@ -115,10 +106,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     controller: _emailController,
                     validator: (value) {
-                      if (value == null || value.isEmpty)
+                      if (value == null || value.isEmpty) {
                         return 'Please enter your email';
-                      if (!value.contains('@'))
+                      }
+                      if (!value.contains('@')) {
                         return 'Please enter a valid email';
+                      }
                       return null;
                     },
                   ),
@@ -131,10 +124,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     isPassword: true,
                     controller: _passwordController,
                     validator: (value) {
-                      if (value == null || value.isEmpty)
+                      if (value == null || value.isEmpty) {
                         return 'Please enter your password';
-                      if (value.length < 6)
+                      }
+                      if (value.length < 6) {
                         return 'Password must be at least 6 characters';
+                      }
                       return null;
                     },
                   ),
