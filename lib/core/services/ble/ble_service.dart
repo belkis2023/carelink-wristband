@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'ble_constants.dart';
 import 'ble_device_model.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 /// The different states our Bluetooth connection can be in
 enum BleConnectionState {
@@ -115,6 +116,13 @@ class BleService {
 
   /// Start scanning for BLE devices
   Future<void> startScan() async {
+    bool hasPermissions = await requestPermissions();
+    if (!hasPermissions) {
+      print('BLE: Permissions not granted, cannot scan');
+      _updateState(BleConnectionState.error);
+      return;
+    }
+
     print('BLE: Starting scan.. .');
     _updateState(BleConnectionState.scanning);
     _devices.clear();
@@ -161,6 +169,32 @@ class BleService {
       print('BLE: Scan error: $e');
       _updateState(BleConnectionState.error);
     }
+  }
+
+  /// Request all required permissions for BLE
+  Future<bool> requestPermissions() async {
+    // Request Bluetooth permissions
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
+
+    // Check if all permissions are granted
+    bool allGranted = statuses.values.every(
+      (status) => status.isGranted || status.isLimited,
+    );
+
+    if (!allGranted) {
+      print('BLE: Some permissions were denied');
+      print('BLE: Bluetooth: ${statuses[Permission.bluetooth]}');
+      print('BLE: BluetoothScan: ${statuses[Permission.bluetoothScan]}');
+      print('BLE: BluetoothConnect: ${statuses[Permission.bluetoothConnect]}');
+      print('BLE: Location: ${statuses[Permission.location]}');
+    }
+
+    return allGranted;
   }
 
   /// Stop scanning for devices
