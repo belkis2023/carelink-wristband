@@ -22,8 +22,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Track whether push notifications are enabled
   bool _pushNotificationsEnabled = true;
 
+  // Profile data
+  String _patientName = 'Loading...';
+  String _patientAge = '--';
+  bool _isLoading = true;
+  bool _hasFetchedProfile = false;
+
+  /// Fetches the profile data from the backend
+  Future<void> _loadProfile() async {
+    try {
+      final token = await CareLinkApi.getToken();
+
+      if (token == null) {
+        setState(() {
+          _patientName = 'Unknown';
+          _patientAge = '--';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final response = await CareLinkApi.getProfile(token);
+
+      setState(() {
+        _patientName = response['name'] ?? 'Patient';
+        _patientAge = response['age']?.toString() ?? '--';
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _patientName = 'Patient';
+        _patientAge = '--';
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Fetch profile only once
+    if (!_hasFetchedProfile) {
+      _hasFetchedProfile = true;
+      _loadProfile();
+    }
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,7 +74,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Monitored Individual Section
           _buildSectionHeader('Monitored Individual'),
-          const ProfileCard(name: 'Alex Johnson', age: '14'),
+          _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(AppConstants.paddingMedium),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : ProfileCard(name: _patientName, age: _patientAge),
           const SizedBox(height: AppConstants.paddingSmall),
 
           // Edit Profile Menu Item
@@ -55,7 +102,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Edit Profile',
               icon: Icons.edit_rounded,
               onTap: () {
-                // Navigate to edit profile screen
                 Navigator.of(context).pushNamed(AppRouter.editProfile);
               },
             ),
@@ -170,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const Divider(height: 1),
                 SettingsMenuItem(
                   title: 'About This App',
-                  subtitle: 'Version 1.0. 0',
+                  subtitle: 'Version 1.0.0',
                   icon: Icons.info_rounded,
                   onTap: () {
                     _showAboutDialog(context);
@@ -231,7 +277,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('About CareLink Wristband'),
         content: const Text(
-          'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support well-being.\n\nVersion: 1.0. 0\n\nDeveloped with love for caregivers and individuals.',
+          'CareLink Wristband helps monitor stress levels, heart rate, motion, and environmental factors to support well-being.\n\nVersion: 1. 0.0\n\nDeveloped with love for caregivers and individuals.',
         ),
         actions: [
           TextButton(
