@@ -12,6 +12,7 @@ import '../../history/screens/history_screen.dart';
 import '../../alerts/screens/alerts_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../../core/api/carelink_api.dart';
+import '../../../core/services/ble/ble_service.dart';
 
 /// The main dashboard screen showing real-time monitoring data.
 /// This is the primary screen users see after logging in.
@@ -82,10 +83,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
+      // NEW CODE (uses actual BLE connection status):
       appBar: CustomAppBar(
         title: _isLoading ? "Loading..." : "$_patientName's Monitor",
         showConnectionStatus: true,
-        isConnected: true,
+        isConnected: BleService().isConnected, // ← NOW USES REAL STATUS
+        connectionStatus: BleService().isConnected
+            ? 'Wristband connected'
+            : 'Wristband disconnected',
       ),
       body: _screens[_currentIndex],
       bottomNavigationBar: BottomNavBar(

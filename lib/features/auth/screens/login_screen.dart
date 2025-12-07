@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.of(context).pushReplacementNamed(AppRouter.dashboard);
+        Navigator.of(context).pushReplacementNamed(AppRouter.deviceConnection);
       } else {
         setState(() {
           _message = response["error"] ?? "Login failed";
