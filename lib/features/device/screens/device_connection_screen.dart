@@ -30,27 +30,32 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
   void _setupListeners() {
     // Listen for connection state changes
     _bleService.connectionState.listen((state) {
-      setState(() {
-        _isScanning = state == BleConnectionState.scanning;
-        _isConnecting = state == BleConnectionState.connecting;
-      });
-
-      if (state == BleConnectionState.connected) {
-        Navigator.pushReplacementNamed(context, AppRouter.dashboard);
-      }
-
-      if (state == BleConnectionState.error && !_isScanning) {
+      if (mounted) {
         setState(() {
-          _errorMessage = 'Connection failed. Please try again.';
+          _isScanning = state == BleConnectionState.scanning;
+          _isConnecting = state == BleConnectionState.connecting;
         });
+
+        if (state == BleConnectionState.connected) {
+          Navigator.pushReplacementNamed(context, AppRouter.dashboard);
+        }
+
+        if (state == BleConnectionState.error && !_isScanning) {
+          setState(() {
+            _errorMessage = 'Connection failed. Please try again.';
+          });
+        }
       }
     });
 
     // Listen for discovered devices
     _bleService.discoveredDevices.listen((devices) {
-      setState(() {
-        _devices = devices;
-      });
+      print('UI: Received ${devices.length} devices');
+      if (mounted) {
+        setState(() {
+          _devices = devices;
+        });
+      }
     });
   }
 

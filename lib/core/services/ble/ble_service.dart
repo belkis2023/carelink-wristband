@@ -32,13 +32,16 @@ class BleService {
   BluetoothDevice? _connectedDevice;
   BluetoothDevice? get connectedDevice => _connectedDevice;
 
-  // Store discovered devices
-  final List<ScanResult> _scanResults = [];
+  // Store discovered devices (use Map to avoid duplicates)
+  final Map<String, ScanResult> _scanResultsMap = {};
+
+  // Subscription to cancel later
+  StreamSubscription? _scanSubscription;
 
   /// Start scanning for ALL Bluetooth devices
   Future<void> startScan() async {
     print('BLE: Starting scan...');
-    _scanResults.clear();
+    _scanResultsMap.clear();
     _updateState(BleConnectionState.scanning);
 
     try {
@@ -50,25 +53,43 @@ class BleService {
         return;
       }
 
+      // Cancel any existing subscription
+      await _scanSubscription?.cancel();
+
       // Listen to scan results
-      FlutterBluePlus.scanResults.listen((results) {
-        _scanResults.clear();
+      _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
         for (ScanResult result in results) {
-          // Add ALL devices (even without names for debugging)
-          _scanResults.add(result);
+          // Use device ID as key to avoid duplicates
+          final deviceId = result.device.remoteId.str;
+          _scanResultsMap[deviceId] = result;
 
           String name = result.device.platformName.isNotEmpty
               ? result.device.platformName
               : 'Unknown Device';
-          print('BLE: Found: $name (${result.device.remoteId})');
+          print('BLE: Found: $name ($deviceId)');
         }
-        _devicesController.add(List.from(_scanResults));
+
+        // Send updated list to UI
+        final deviceList = _scanResultsMap.values.toList();
+
+        // Sort: devices with names first, then by signal strength
+        deviceList.sort((a, b) {
+          final aHasName = a.device.platformName.isNotEmpty;
+          final bHasName = b.device.platformName.isNotEmpty;
+
+          if (aHasName && !bHasName) return -1;
+          if (!aHasName && bHasName) return 1;
+          return b.rssi.compareTo(a.rssi); // Stronger signal first
+        });
+
+        _devicesController.add(deviceList);
+        print('BLE: Total unique devices: ${deviceList.length}');
       });
 
       // Start scanning (scan for 15 seconds)
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
-      print('BLE: Scan complete.  Found ${_scanResults.length} devices.');
+      print('BLE: Scan complete.  Found ${_scanResultsMap.length} devices.');
       _updateState(BleConnectionState.disconnected);
     } catch (e) {
       print('BLE: Scan error: $e');
@@ -79,6 +100,7 @@ class BleService {
   /// Stop scanning
   Future<void> stopScan() async {
     await FlutterBluePlus.stopScan();
+    await _scanSubscription?.cancel();
     _updateState(BleConnectionState.disconnected);
   }
 
@@ -88,6 +110,9 @@ class BleService {
     _updateState(BleConnectionState.connecting);
 
     try {
+      // Stop scanning first
+      await FlutterBluePlus.stopScan();
+
       await device.connect(timeout: const Duration(seconds: 15));
       _connectedDevice = device;
 
@@ -132,6 +157,7 @@ class BleService {
 
   /// Dispose
   void dispose() {
+    _scanSubscription?.cancel();
     _connectionStateController.close();
     _devicesController.close();
     _heartRateController.close();
