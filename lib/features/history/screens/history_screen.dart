@@ -1,19 +1,97 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../shared/widgets/custom_card.dart';
+import '../../../core/services/noise_history_service.dart';
+import '../../../core/services/heart_rate_history_service.dart';
+import '../../../core/services/alert_service.dart';
 import '../widgets/date_selector_card.dart';
 import '../widgets/metrics_chart.dart';
-import '../widgets/weekly_stress_card.dart';
+import '../widgets/heart_rate_chart.dart';
 import '../widgets/notable_event_card.dart';
 
+/// Helper function to format date
+String _formatDate(DateTime date) {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${months[date.month - 1]} ${date.day}, ${date.year}';
+}
+
+/// Helper function to format time
+String _formatTime(DateTime time) {
+  final hour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+  final period = time.hour >= 12 ? 'PM' : 'AM';
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$hour:$minute $period';
+}
+
 /// The history screen showing past monitoring data, trends, and notable events.
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final NoiseHistoryService _historyService = NoiseHistoryService();
+  final AlertService _alertService = AlertService();
+  StreamSubscription? _historySubscription;
+  StreamSubscription<AlertEvent>? _alertSubscription;
+
+  List<NoiseDataPoint> _dataPoints = [];
+  List<AlertEvent> _alerts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    _historySubscription = _historyService.historyStream.listen((_) {
+      if (mounted) {
+        _loadData();
+      }
+    });
+    _alertSubscription = _alertService.alertStream.listen((_) {
+      if (mounted) {
+        _loadData();
+      }
+    });
+  }
+
+  void _loadData() {
+    setState(() {
+      _dataPoints = _historyService.getTodayDataPoints();
+      _alerts = _alertService.alerts.take(10).toList();
+    });
+  }
+
+  @override
+  void dispose() {
+    _historySubscription?.cancel();
+    _alertSubscription?.cancel();
+    super.dispose();
+  }
+
+  double get _avgNoise {
+    if (_dataPoints.isEmpty) return 0;
+    return _dataPoints.fold<double>(0, (sum, dp) => sum + dp.rmsValue) / _dataPoints.length;
+  }
+
+  NoiseDataPoint? get _peakNoise {
+    if (_dataPoints.isEmpty) return null;
+    return _dataPoints.reduce((a, b) => a.rmsValue > b.rmsValue ? a : b);
+  }
+
+  int get _dangerCount {
+    return _dataPoints.where((dp) => dp.rmsValue >= 1800).length;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dateText = 'Today - ${_formatDate(now)}';
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -22,41 +100,50 @@ class HistoryScreen extends StatelessWidget {
 
           // Date Selector
           DateSelectorCard(
-            dateText: 'Today - Nov 27, 2025',
+            dateText: dateText,
             onTap: () {
-              // In a real app, this would open a date picker
               _showDatePicker(context);
             },
           ),
           const SizedBox(height: AppConstants.paddingMedium),
 
-          // Metrics Chart
+          // Noise Level Chart (Live noise data)
           const MetricsChart(),
           const SizedBox(height: AppConstants.paddingMedium),
 
-          // Summary Cards Row
+          // Heart Rate Chart (Live BPM data)
+          const HeartRateChart(),
+          const SizedBox(height: AppConstants.paddingMedium),
+
+          // Summary Cards Row (Live stats)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
             child: Row(
               children: [
-                // Average Stress Card
+                // Average Noise Card
                 Expanded(
                   child: _buildSummaryCard(
-                    title: 'Avg Stress',
-                    value: '5.3',
-                    subtitle: '-0.8 from yesterday',
-                    subtitleColor: AppColors.successGreen,
-                    icon: Icons.trending_down_rounded,
+                    title: 'Avg Noise',
+                    value: _avgNoise.toStringAsFixed(0),
+                    subtitle: _dataPoints.isEmpty
+                        ? 'No data yet'
+                        : '${_dataPoints.length} readings',
+                    subtitleColor: AppColors.textSecondary,
+                    icon: Icons.volume_up_rounded,
                   ),
                 ),
                 const SizedBox(width: AppConstants.paddingMedium),
-                // Peak Stress Card
+                // Peak Noise Card
                 Expanded(
                   child: _buildSummaryCard(
-                    title: 'Peak Stress',
-                    value: '7.2',
-                    subtitle: 'at 11:15 AM',
-                    subtitleColor: AppColors.textSecondary,
+                    title: 'Peak Noise',
+                    value: _peakNoise?.rmsValue.toStringAsFixed(0) ?? '-',
+                    subtitle: _peakNoise != null
+                        ? 'at ${_formatTime(_peakNoise!.timestamp)}'
+                        : 'No data',
+                    subtitleColor: _peakNoise != null && _peakNoise!.rmsValue >= 1800
+                        ? AppColors.dangerRed
+                        : AppColors.textSecondary,
                     icon: Icons.show_chart_rounded,
                   ),
                 ),
@@ -65,36 +152,125 @@ class HistoryScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppConstants.paddingMedium),
 
-          // Weekly Average Stress
-          const WeeklyStressCard(),
-          const SizedBox(height: AppConstants.paddingLarge),
-
-          // Notable Events Section
+          // Danger Events Count
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
-            child: Text(
-              'Notable Events',
-              style: AppTextStyles.heading3,
+            child: Container(
+              padding: const EdgeInsets.all(AppConstants.paddingMedium),
+              decoration: BoxDecoration(
+                color: _dangerCount > 0
+                    ? AppColors.dangerRed.withOpacity(0.1)
+                    : AppColors.successGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                border: Border.all(
+                  color: _dangerCount > 0 ? AppColors.dangerRed : AppColors.successGreen,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _dangerCount > 0 ? Icons.warning_rounded : Icons.check_circle_rounded,
+                    color: _dangerCount > 0 ? AppColors.dangerRed : AppColors.successGreen,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _dangerCount > 0
+                              ? '$_dangerCount Danger Events Today'
+                              : 'No Danger Events Today',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: _dangerCount > 0 ? AppColors.dangerRed : AppColors.successGreen,
+                          ),
+                        ),
+                        Text(
+                          _dangerCount > 0
+                              ? 'Noise exceeded 1800 RMS threshold'
+                              : 'Noise levels have been safe',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppConstants.paddingLarge),
+
+          // Notable Events Section (Dynamic from AlertService)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Notable Events',
+                  style: AppTextStyles.heading3,
+                ),
+                if (_alerts.isNotEmpty)
+                  Text(
+                    '${_alerts.length} events',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: AppConstants.paddingSmall),
 
-          // Event cards
-          const NotableEventCard(
-            time: '11:15 AM',
-            description: 'High stress spike detected during class presentation',
-            stressLevel: 7.2,
-          ),
-          const NotableEventCard(
-            time: '2:30 PM',
-            description: 'Noise level exceeded 75dB for 15 minutes',
-            stressLevel: 6.5,
-          ),
-          const NotableEventCard(
-            time: '4:45 PM',
-            description: 'Stress normalized after outdoor activity',
-            stressLevel: 4.1,
-          ),
+          // Alert event cards from AlertService
+          if (_alerts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+              child: Container(
+                padding: const EdgeInsets.all(AppConstants.paddingLarge),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                ),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.event_note_rounded,
+                        size: 48,
+                        color: AppColors.textSecondary.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No notable events yet',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Events will appear when noise exceeds thresholds',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            ..._alerts.map((alert) => NotableEventCard(
+              time: _formatTime(alert.timestamp),
+              description: alert.description,
+              stressLevel: 0, // Not used for noise alerts
+              isNoiseAlert: true,
+              severity: alert.severity,
+            )),
+
           const SizedBox(height: AppConstants.paddingLarge),
         ],
       ),

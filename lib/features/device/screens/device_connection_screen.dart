@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/services/ble/ble_service.dart';
 import '../../../navigation/app_router.dart';
 
 class DeviceConnectionScreen extends StatefulWidget {
@@ -106,7 +107,14 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
 
     try {
       await FlutterBluePlus.stopScan();
-      await device.connect(timeout: const Duration(seconds: 10));
+
+      // Use BleService to connect - this handles service discovery and subscriptions
+      final bleService = BleService();
+      final success = await bleService.connectToDevice(device);
+
+      if (!success) {
+        throw Exception('Connection failed');
+      }
 
       print('✅ Connected to $name!');
 
@@ -240,8 +248,8 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                             children: [
                               // Icon
                               Container(
-                                width: 44,
-                                height: 44,
+                                width: 40,
+                                height: 40,
                                 decoration: BoxDecoration(
                                   color: isCareLink
                                       ? AppColors.primaryBlue.withOpacity(0.1)
@@ -253,9 +261,10 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                                   color: isCareLink
                                       ? AppColors.primaryBlue
                                       : Colors.grey,
+                                  size: 20,
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
 
                               // Name and signal
                               Expanded(
@@ -268,24 +277,27 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                                         fontWeight: isCareLink
                                             ? FontWeight.bold
                                             : FontWeight.normal,
-                                        fontSize: 16,
+                                        fontSize: 14,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     Text(
-                                      'Signal: ${result.rssi} dBm',
+                                      '${result.rssi} dBm',
                                       style: TextStyle(
                                         color: Colors.grey.shade600,
-                                        fontSize: 12,
+                                        fontSize: 11,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
 
                               // Connect button
                               SizedBox(
-                                width: 80,
-                                height: 36,
+                                width: 70,
+                                height: 32,
                                 child: ElevatedButton(
                                   onPressed: _isConnecting
                                       ? null
@@ -298,7 +310,7 @@ class _DeviceConnectionScreenState extends State<DeviceConnectionScreen> {
                                   ),
                                   child: const Text(
                                     'Connect',
-                                    style: TextStyle(fontSize: 12),
+                                    style: TextStyle(fontSize: 11),
                                   ),
                                 ),
                               ),

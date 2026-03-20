@@ -164,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       _message!,
                       style: TextStyle(
-                        color: _message == "Login successful!"
+                        color: _message!.contains("successful")
                             ? Colors.green
                             : Colors.red,
                       ),

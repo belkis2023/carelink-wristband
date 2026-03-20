@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../shared/widgets/custom_app_bar.dart';
 import '../../../shared/widgets/bottom_nav_bar.dart';
 import '../../../shared/widgets/custom_card.dart';
-import '../widgets/stress_level_card.dart';
+import '../../../core/services/ble/ble_service.dart';
+import '../../../core/services/alert_service.dart';
+import '../../../core/services/threshold_settings.dart';
 import '../widgets/metric_card.dart';
-import '../widgets/haptic_toggle_card.dart';
 import '../../history/screens/history_screen.dart';
 import '../../alerts/screens/alerts_screen.dart';
 import '../../settings/screens/settings_screen.dart';
@@ -25,11 +25,30 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   // Current tab index for bottom navigation
   int _currentIndex = 0;
+  final BleService _bleService = BleService();
 
-  // ============ STATIC PATIENT DATA ============
+  ({String label, bool isConnected}) _appBarStatusForState(
+    BleConnectionState state,
+  ) {
+    switch (state) {
+      case BleConnectionState.connected:
+        return (label: 'Wristband connected', isConnected: true);
+      case BleConnectionState.connecting:
+        return (label: 'Connecting to wristband...', isConnected: false);
+      case BleConnectionState.scanning:
+        return (label: 'Scanning for wristband...', isConnected: false);
+      case BleConnectionState.error:
+        return (label: 'Wristband error', isConnected: false);
+      case BleConnectionState.disconnected:
+      default:
+        return (label: 'Wristband disconnected', isConnected: false);
+    }
+  }
+
+  // ============ STATIC PATIENT DATA ==========
   // ============ STATIC PATIENT DATA (Tunisian) ============
-  static const String patientName = "Fatma Ben Ali"; // ← Changed!
-  static const int patientAge = 68;
+  static const String patientName = "Yassine Ben Salah";
+  static const int patientAge = 22;
   static const String patientCondition = "Heart Monitoring";
   // ========================================================
   // ============================================
@@ -37,11 +56,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppBar(
-        title: "$patientName's Monitor",
-        showConnectionStatus: true,
-        isConnected: true, // We just connected, so show as connected
-        connectionStatus: 'Wristband connected',
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(AppConstants.appBarHeight + 20),
+        child: StreamBuilder<BleConnectionState>(
+          stream: _bleService.connectionState,
+          initialData: _bleService.currentState,
+          builder: (context, snapshot) {
+            final status = _appBarStatusForState(
+              snapshot.data ?? BleConnectionState.disconnected,
+            );
+
+            return CustomAppBar(
+              title: "$patientName's Monitor",
+              showConnectionStatus: true,
+              isConnected: status.isConnected,
+              connectionStatus: status.label,
+            );
+          },
+        ),
       ),
       body: IndexedStack(
         index: _currentIndex,
@@ -64,7 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-/// The actual dashboard content with LIVE heart rate from BLE
+/// The actual dashboard content with LIVE sensor values from BLE
 class _DashboardContent extends StatefulWidget {
   const _DashboardContent();
 
@@ -74,121 +106,128 @@ class _DashboardContent extends StatefulWidget {
 
 class _DashboardContentState extends State<_DashboardContent> {
   // ============ DYNAMIC DATA (from ESP32) ============
-  int _heartRate = 72; // Will update from BLE
-  bool _isReadingHeartRate = false;
+  Map<String, String> _sensorValues = {}; // UUID -> formatted value
+  bool _isReadingData = false;
+  AlertEvent? _latestDangerAlert; // Track latest danger alert
   // ==================================================
 
   // ============ STATIC DATA (for demo) ============
-  static const double stressLevel = 4.2;
-  static const String stressStatus = "Low";
-  static const String motionStatus = "Resting";
-  static const int noiseLevel = 42;
   static const int batteryLevel = 85;
   // ================================================
 
-  StreamSubscription? _heartRateSubscription;
+  final BleService _bleService = BleService();
+  final AlertService _alertService = AlertService();
+  StreamSubscription<Map<String, String>>? _sensorSubscription;
+  StreamSubscription<AlertEvent>? _alertSubscription;
 
   @override
   void initState() {
     super.initState();
-    _subscribeToHeartRate();
+    _subscribeToSensor();
+    _subscribeToAlerts();
   }
 
   @override
   void dispose() {
-    _heartRateSubscription?.cancel();
+    _sensorSubscription?.cancel();
+    _alertSubscription?.cancel();
     super.dispose();
   }
 
-  /// Subscribe to heart rate notifications from connected BLE device
-  Future<void> _subscribeToHeartRate() async {
-    try {
-      // Get list of connected devices
-      final connectedDevices = FlutterBluePlus.connectedDevices;
+  /// Subscribe to sensor values stream from BleService
+  void _subscribeToSensor() {
+    // Initialize with current values
+    _sensorValues = Map.from(_bleService.sensorValues);
+    _isReadingData = _sensorValues.isNotEmpty;
+    print('🏠 Dashboard: Initial sensor values: $_sensorValues');
 
-      if (connectedDevices.isEmpty) {
-        print('❌ No connected devices');
-        return;
+    _sensorSubscription = _bleService.sensorValuesStream.listen((values) {
+      print('🏠 Dashboard: Received sensor update: $values');
+      if (mounted) {
+        setState(() {
+          _sensorValues = values;
+          _isReadingData = values.isNotEmpty;
+        });
+        print('🏠 Dashboard: Updated - RMS: ${values['rms']}, BPM: ${values['bpm']}, State: ${values['state']}');
       }
-
-      final device = connectedDevices.first;
-      print('📱 Connected to: ${device.platformName}');
-
-      // Discover services
-      final services = await device.discoverServices();
-      print('🔍 Found ${services.length} services');
-
-      for (var service in services) {
-        print('  Service: ${service.uuid}');
-
-        for (var characteristic in service.characteristics) {
-          print(
-            '    Char: ${characteristic.uuid} - notify: ${characteristic.properties.notify}',
-          );
-
-          // Look for Heart Rate Measurement characteristic (standard UUID)
-          // OR any characteristic that can notify (for custom ESP32 implementations)
-          final uuid = characteristic.uuid.toString().toLowerCase();
-
-          // Standard Heart Rate Measurement UUID: 00002a37-...
-          // You can also add your custom ESP32 UUID here
-          if (uuid.contains('2a37') || characteristic.properties.notify) {
-            try {
-              await characteristic.setNotifyValue(true);
-              print('✅ Subscribed to: ${characteristic.uuid}');
-
-              setState(() {
-                _isReadingHeartRate = true;
-              });
-
-              _heartRateSubscription = characteristic.onValueReceived.listen((
-                value,
-              ) {
-                if (value.isNotEmpty) {
-                  // Parse heart rate value
-                  int hr = _parseHeartRate(value);
-                  print('❤️ Heart Rate: $hr BPM');
-
-                  setState(() {
-                    _heartRate = hr;
-                  });
-                }
-              });
-
-              // Only subscribe to first matching characteristic
-              return;
-            } catch (e) {
-              print('⚠️ Could not subscribe to ${characteristic.uuid}: $e');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('❌ Error subscribing to heart rate: $e');
-    }
+    });
   }
 
-  /// Parse heart rate from BLE characteristic value
-  int _parseHeartRate(List<int> value) {
-    if (value.isEmpty) return _heartRate;
+  /// Subscribe to alert stream for danger alerts
+  void _subscribeToAlerts() {
+    _alertSubscription = _alertService.alertStream.listen((alert) {
+      if (mounted && alert.severity == AlertSeverity.danger) {
+        setState(() {
+          _latestDangerAlert = alert;
+        });
+        // Auto-dismiss after 10 seconds
+        Future.delayed(const Duration(seconds: 10), () {
+          if (mounted && _latestDangerAlert?.id == alert.id) {
+            setState(() {
+              _latestDangerAlert = null;
+            });
+          }
+        });
+      }
+    });
+  }
 
-    // Standard Heart Rate Measurement format:
-    // Byte 0: Flags (bit 0 = 0 means HR is uint8, bit 0 = 1 means HR is uint16)
-    // Byte 1: Heart Rate value (uint8) or Bytes 1-2: Heart Rate value (uint16)
+  /// Get RMS value from sensor values
+  String get _rmsValue {
+    return _sensorValues['rms'] ?? '-';
+  }
 
-    final flags = value[0];
-    final isUint16 = (flags & 0x01) != 0;
+  /// Get noise status based on RMS value and configurable thresholds
+  /// Status is determined locally using ThresholdSettings
+  String get _noiseStatus {
+    final rmsString = _sensorValues['rms'] ?? '-';
+    if (rmsString == '-') return 'Unknown';
 
-    if (isUint16 && value.length >= 3) {
-      // uint16 little-endian
-      return value[1] | (value[2] << 8);
-    } else if (value.length >= 2) {
-      // uint8
-      return value[1];
-    } else {
-      // Fallback: just use first byte as heart rate (custom format)
-      return value[0];
-    }
+    final rms = double.tryParse(rmsString);
+    if (rms == null) return 'Unknown';
+
+    // Use configurable thresholds to determine status
+    return ThresholdSettings().getNoiseStatus(rms);
+  }
+
+  /// Get color for noise status
+  Color get _noiseStatusColor {
+    final status = _noiseStatus.toUpperCase();
+    if (status.contains('DANGER')) return AppColors.dangerRed;
+    if (status.contains('MODER') || status.contains('MODÉRÉ')) return AppColors.warningYellow;
+    if (status.contains('CALME') || status.contains('CALM')) return AppColors.successGreen;
+    return AppColors.textSecondary;
+  }
+
+  /// Get heart rate (BPM) value from sensor values
+  String get _heartRateValue {
+    return _sensorValues['bpm'] ?? '-';
+  }
+
+  /// Get heart rate status based on configurable thresholds
+  String get _heartRateStatus {
+    final bpmString = _sensorValues['bpm'] ?? '-';
+    if (bpmString == '-') return 'Unknown';
+
+    final bpm = double.tryParse(bpmString);
+    if (bpm == null) return 'Unknown';
+
+    return ThresholdSettings().getHeartRateStatus(bpm);
+  }
+
+  /// Get gyroscope value from sensor values
+  String get _gyroValue {
+    return _sensorValues['gyro'] ?? '-';
+  }
+
+  /// Get accelerometer value from sensor values
+  String get _accValue {
+    return _sensorValues['acc'] ?? '-';
+  }
+
+  /// Get motion state from sensor values (Chute, Marche, etc.)
+  String get _motionState {
+    return _sensorValues['state'] ?? '-';
   }
 
   @override
@@ -198,6 +237,61 @@ class _DashboardContentState extends State<_DashboardContent> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: AppConstants.paddingMedium),
+
+          // DANGER ALERT BANNER (shows when noise exceeds danger threshold)
+          if (_latestDangerAlert != null)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+              padding: const EdgeInsets.all(AppConstants.paddingMedium),
+              decoration: BoxDecoration(
+                color: AppColors.dangerRed,
+                borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.dangerRed.withOpacity(0.4),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_rounded, color: Colors.white, size: 32),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _latestDangerAlert!.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _latestDangerAlert!.description,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () {
+                      setState(() {
+                        _latestDangerAlert = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          if (_latestDangerAlert != null)
+            const SizedBox(height: AppConstants.paddingMedium),
+
 
           // Current Status Section Header
           Padding(
@@ -210,7 +304,7 @@ class _DashboardContentState extends State<_DashboardContent> {
                 Text('Current Status', style: AppTextStyles.heading2),
                 const SizedBox(height: 4),
                 Text(
-                  _isReadingHeartRate
+                  _isReadingData
                       ? 'Live data from wristband'
                       : 'Connecting to wristband...',
                   style: AppTextStyles.subtitle,
@@ -220,11 +314,7 @@ class _DashboardContentState extends State<_DashboardContent> {
           ),
           const SizedBox(height: AppConstants.paddingMedium),
 
-          // Stress Level Card (STATIC)
-          const StressLevelCard(stressLevel: stressLevel, status: stressStatus),
-          const SizedBox(height: AppConstants.paddingMedium),
-
-          // Metrics Grid (Heart Rate is DYNAMIC, others are STATIC)
+          // Metrics Grid
           Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppConstants.paddingMedium,
@@ -237,25 +327,27 @@ class _DashboardContentState extends State<_DashboardContent> {
               crossAxisSpacing: AppConstants.paddingMedium,
               childAspectRatio: 0.9,
               children: [
-                // ❤️ DYNAMIC HEART RATE FROM ESP32!
+                // 📊 DYNAMIC NOISE STATUS FROM ESP32!
+                MetricCard(
+                  label: 'Noise Level',
+                  value: _noiseStatus,
+                  icon: Icons.volume_up_rounded,
+                  valueColor: _noiseStatusColor,
+                ),
+                // 📊 DYNAMIC HEART RATE FROM ESP32!
                 MetricCard(
                   label: 'Heart Rate',
-                  value: '$_heartRate',
+                  value: _heartRateValue,
                   unit: 'BPM',
                   icon: Icons.favorite_rounded,
-                  valueColor: _getHeartRateColor(_heartRate),
+                  valueColor: _getHeartRateColor(_heartRateValue),
                 ),
-                // Static metrics below
-                const MetricCard(
+                // 📊 DYNAMIC MOTION STATE FROM ESP32!
+                MetricCard(
                   label: 'Motion',
-                  value: motionStatus,
+                  value: _motionState,
                   icon: Icons.directions_walk_rounded,
-                ),
-                const MetricCard(
-                  label: 'Noise Level',
-                  value: '$noiseLevel',
-                  unit: 'dB',
-                  icon: Icons.volume_up_rounded,
+                  valueColor: _getMotionStateColor(_motionState),
                 ),
                 const MetricCard(
                   label: 'Battery',
@@ -267,10 +359,6 @@ class _DashboardContentState extends State<_DashboardContent> {
               ],
             ),
           ),
-          const SizedBox(height: AppConstants.paddingMedium),
-
-          // Haptic Feedback Toggle
-          const HapticToggleCard(),
           const SizedBox(height: AppConstants.paddingLarge),
 
           // About These Metrics Section
@@ -291,13 +379,13 @@ class _DashboardContentState extends State<_DashboardContent> {
                 ),
                 const SizedBox(height: AppConstants.paddingMedium),
                 _buildMetricInfo(
-                  'Stress Level (GSR)',
-                  'Measures skin conductance to detect stress and emotional responses. Scale: 0-10.',
+                  'Noise Level',
+                  'Measures ambient sound from the audio sensor. Calm = safe, Moderate = caution, DANGER = excessive noise.',
                 ),
                 const SizedBox(height: AppConstants.paddingSmall),
                 _buildMetricInfo(
                   'Heart Rate',
-                  'Tracks beats per minute (BPM) from the wristband sensor.  Normal range: 60-100 BPM.',
+                  'Monitors heart rate in beats per minute (BPM). Normal range: 60-100 BPM.',
                 ),
                 const SizedBox(height: AppConstants.paddingSmall),
                 _buildMetricInfo(
@@ -306,8 +394,8 @@ class _DashboardContentState extends State<_DashboardContent> {
                 ),
                 const SizedBox(height: AppConstants.paddingSmall),
                 _buildMetricInfo(
-                  'Noise Level',
-                  'Measures ambient sound in decibels (dB) to assess environmental conditions.',
+                  'Battery',
+                  'Shows remaining wristband battery percentage.',
                 ),
               ],
             ),
@@ -318,11 +406,41 @@ class _DashboardContentState extends State<_DashboardContent> {
     );
   }
 
-  /// Get color based on heart rate value
-  Color _getHeartRateColor(int hr) {
-    if (hr < 60) return AppColors.dangerRed; // Too low
-    if (hr > 100) return AppColors.dangerRed; // Too high
+  /// Get color based on noise level value (String)
+  Color _getSensorValueColor(String value) {
+    final intValue = int.tryParse(value) ?? 0;
+    // For noise level (in dB): green if low, red if high
+    if (intValue < 60) return AppColors.successGreen; // Quiet
+    if (intValue > 80) return AppColors.dangerRed; // Too loud
+    return AppColors.warningYellow; // Moderate
+  }
+
+  /// Get color based on heart rate value (String)
+  Color _getHeartRateColor(String value) {
+    final doubleValue = double.tryParse(value) ?? 0;
+    // For heart rate: green if normal, red if too high/low
+    if (doubleValue == 0) return AppColors.textSecondary; // No data
+    if (doubleValue < ThresholdSettings().heartRateLowThreshold) return AppColors.warningYellow; // Low
+    if (doubleValue > ThresholdSettings().heartRateHighThreshold) return AppColors.dangerRed; // High
     return AppColors.successGreen; // Normal
+  }
+
+  /// Get color based on motion state
+  Color _getMotionStateColor(String state) {
+    final upper = state.toUpperCase();
+    if (upper.contains('CHUTE') || upper.contains('FALL')) {
+      return AppColors.dangerRed; // Fall detected - danger!
+    }
+    if (upper.contains('COURSE') || upper.contains('RUN')) {
+      return AppColors.warningYellow; // Running
+    }
+    if (upper.contains('MARCHE') || upper.contains('WALK')) {
+      return AppColors.primaryBlue; // Walking
+    }
+    if (upper.contains('REPOS') || upper.contains('REST') || upper.contains('IDLE') || upper.contains('OK')) {
+      return AppColors.successGreen; // Resting / OK
+    }
+    return AppColors.textSecondary; // Unknown
   }
 
   /// Helper widget to build metric information rows

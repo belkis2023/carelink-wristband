@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/constants/app_constants.dart';
+import 'core/services/notification_service.dart';
+import 'core/services/threshold_settings.dart';
 import 'navigation/app_router.dart';
 
 /// The main entry point of the CareLink Wristband app.
 /// This function initializes and runs the Flutter application.
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize threshold settings (load from storage)
+  await ThresholdSettings().initialize();
+
+  // Initialize notification service for push notifications
+  await NotificationService().initialize();
+
   runApp(const CareLinkApp());
 }
 
